@@ -4,47 +4,32 @@ pragma solidity ^0.8.13;
 import "../lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
 import "../lib/openzeppelin-contracts/contracts/access/Ownable.sol";
 import "../lib/openzeppelin-contracts/contracts/utils/Pausable.sol";
-
-// errors
-error TargetAmountTooLow();
-error DeadlineMustBeInFuture();
-error UserDoesNotExist();
-error MilestoneNotActive();
-error MilestoneAlreadyCompleted();
-error MilestoneDeadlinePassed();
-error CannotWithdrawBeforeCompletionOrDeadline();
-error NoFundsToWithdraw();
-error FeeTransferFailed();
-error WithdrawalFailed();
-error PenaltyTransferFailed();
-error EmergencyWithdrawalFailed();
-error FeeTooHigh();
-error InvalidMilestoneName();
+import "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import "../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+import "./IStashflow.sol";
 
 /**
  * @title Stashflow
  * @dev A contract for saving based on milestones with target amounts and deadlines
  */
-contract Stashflow is ReentrancyGuard, Ownable, Pausable {
+contract Stashflow is ReentrancyGuard, Ownable, Pausable, IStashflow {
+    using SafeERC20 for IERC20;
+    
     // Status constants
     uint8 constant STATUS_INACTIVE = 0;
     uint8 constant STATUS_ACTIVE = 1;
     uint8 constant STATUS_COMPLETED = 2;
     
-    // Milestone structure - optimized for gas efficiency
-    struct Milestone {
-        bytes32 name;          // name (32 bytes)
-        uint256 targetAmount;  // Target amount to save
-        uint256 deadline;      // Deadline timestamp
-        uint256 currentAmount; // Current amount saved
-        uint8 status;          // Status: 0=inactive, 1=active, 2=completed
-    }
+    // Milestone type constants
+    uint8 constant TYPE_FIXED_DEPOSIT = 0;
+    uint8 constant TYPE_RANDOM_DEPOSIT = 1;
     
     // User structure
     struct User {
         bool exists;
         uint256 totalSavings;
         uint256[] milestoneIds;
+        mapping(address => uint256) tokenSavings; // Total savings per token
     }
     
     // Mapping from user address to their User struct
@@ -56,46 +41,52 @@ contract Stashflow is ReentrancyGuard, Ownable, Pausable {
     // Counter for milestone IDs
     uint256 private _milestoneIdCounter;
     
-    // Minimum savings amount
+    // Minimum savings amount (in wei for ETH, smallest unit for tokens)
     uint256 public minSavingsAmount = 0.01 ether;
     
     // Platform fee (in basis points, 1% = 100)
     uint256 public platformFee = 50; // 0.5%
     
-    // Events
-    event MilestoneCreated(address indexed user, uint256 indexed milestoneId, bytes32 name, uint256 targetAmount, uint256 deadline);
-    event Deposit(address indexed user, uint256 indexed milestoneId, uint256 amount);
-    event MilestoneCompleted(address indexed user, uint256 indexed milestoneId);
-    event MilestoneFailed(address indexed user, uint256 indexed milestoneId);
-    event Withdrawal(address indexed user, uint256 amount);
-    event EmergencyWithdrawal(address indexed user, uint256 indexed milestoneId, uint256 amount);
+    // Early withdrawal penalty (in basis points, 1% = 100)
+    uint256 public withdrawalPenalty = 500; // 5%
     
-    constructor() Ownable(msg.sender) {}
+    // Allowed tokens mapping
+    mapping(address => bool) public allowedTokens;
+    
+    // Treasury address that receives fees and penalties
+    address public treasuryAddress;
+     
+    constructor() Ownable(msg.sender) {
+        // Native ETH is always allowed
+        allowedTokens[address(0)] = true;
+        
+        // Initially set treasury to owner
+        treasuryAddress = msg.sender;
+    }
     
     /**
      * @dev Creates a new savings milestone
-     * @param _name Name of the milestone
+     * @param _name Name of the milestone (32 bytes)
      * @param _targetAmount Target amount to save
      * @param _deadline Deadline timestamp for the milestone
+     * @param _tokenAddress Address of token (address(0) for native ETH)
+     * @param _milestoneType Type of milestone (0=fixed, 1=random deposit amounts)
+     * @param _fixedAmount Fixed deposit amount (if applicable)
      */
     function createMilestone(
-        string memory _name,
+        bytes32 _name,
         uint256 _targetAmount,
-        uint256 _deadline
+        uint256 _deadline,
+        address _tokenAddress,
+        uint8 _milestoneType,
+        uint256 _fixedAmount
     ) external whenNotPaused {
         if (_targetAmount < minSavingsAmount) revert TargetAmountTooLow();
         if (_deadline <= block.timestamp) revert DeadlineMustBeInFuture();
-        
-        // Check that name is not empty and not too long for bytes32
-        bytes memory nameBytes = bytes(_name);
-        if (nameBytes.length == 0 || nameBytes.length > 32) revert InvalidMilestoneName();
-        
-        // Convert string to bytes32
-        bytes32 nameBytes32;
-        assembly {
-            nameBytes32 := mload(add(_name, 32))
-        }
-        
+        if (!allowedTokens[_tokenAddress]) revert TokenNotAllowed();
+        if (_milestoneType == TYPE_FIXED_DEPOSIT && _fixedAmount == 0) revert InvalidFixedDepositAmount();
+        if (_milestoneType > TYPE_RANDOM_DEPOSIT) revert InvalidMilestoneName();
+    
         // Create user if doesn't exist
         if (!users[msg.sender].exists) {
             users[msg.sender].exists = true;
@@ -105,30 +96,46 @@ contract Stashflow is ReentrancyGuard, Ownable, Pausable {
         
         // Create new milestone
         Milestone storage newMilestone = milestones[msg.sender][milestoneId];
-        newMilestone.name = nameBytes32;
+        newMilestone.name = _name;
         newMilestone.targetAmount = _targetAmount;
         newMilestone.deadline = _deadline;
         newMilestone.currentAmount = 0;
         newMilestone.status = STATUS_ACTIVE;
+        newMilestone.tokenAddress = _tokenAddress;
+        newMilestone.milestoneType = _milestoneType;
+        newMilestone.fixedAmount = _fixedAmount;
         
         // Add milestone ID to user's list
         users[msg.sender].milestoneIds.push(milestoneId);
         
-        emit MilestoneCreated(msg.sender, milestoneId, nameBytes32, _targetAmount, _deadline);
+        emit MilestoneCreated(
+            msg.sender, 
+            milestoneId, 
+            _name, 
+            _targetAmount, 
+            _deadline, 
+            _tokenAddress, 
+            _milestoneType, 
+            _fixedAmount
+        );
     }
     
     /**
-     * @dev Allows a user to deposit funds toward a specific milestone
+     * @dev Allows a user to deposit native ETH toward a specific milestone
      * @param _milestoneId ID of the milestone
      */
     function deposit(uint256 _milestoneId) external payable nonReentrant whenNotPaused {
-        if (msg.value < minSavingsAmount) revert TargetAmountTooLow();
-        if (!users[msg.sender].exists) revert UserDoesNotExist();
-        
         Milestone storage milestone = milestones[msg.sender][_milestoneId];
-        if (milestone.status != STATUS_ACTIVE) revert MilestoneNotActive();
-        if (milestone.status == STATUS_COMPLETED) revert MilestoneAlreadyCompleted();
-        if (block.timestamp > milestone.deadline) revert MilestoneDeadlinePassed();
+        
+        // Ensure milestone uses native token
+        if (milestone.tokenAddress != address(0)) revert OnlyNativeTokenAllowed();
+        
+        _validateDepositRequirements(msg.sender, _milestoneId, msg.value);
+        
+        // For fixed deposits, ensure the amount matches
+        if (milestone.milestoneType == TYPE_FIXED_DEPOSIT && msg.value != milestone.fixedAmount) {
+            revert InvalidTokenAmount();
+        }
         
         // Calculate fee
         uint256 fee = (msg.value * platformFee) / 10000;
@@ -138,16 +145,84 @@ contract Stashflow is ReentrancyGuard, Ownable, Pausable {
         milestone.currentAmount += depositAmount;
         users[msg.sender].totalSavings += depositAmount;
         
-        // Transfer fee to contract owner
-        (bool feeSuccess, ) = owner().call{value: fee}("");
+        // Transfer fee to treasury
+        (bool feeSuccess, ) = treasuryAddress.call{value: fee}("");
         if (!feeSuccess) revert FeeTransferFailed();
         
-        emit Deposit(msg.sender, _milestoneId, depositAmount);
+        emit Deposit(msg.sender, _milestoneId, depositAmount, address(0));
+        
+        _checkMilestoneCompletion(msg.sender, _milestoneId);
+    }
+    
+    /**
+     * @dev Allows a user to deposit ERC20 tokens toward a specific milestone
+     * @param _milestoneId ID of the milestone
+     * @param _amount Amount of tokens to deposit
+     */
+    function depositToken(uint256 _milestoneId, uint256 _amount) external nonReentrant whenNotPaused {
+        Milestone storage milestone = milestones[msg.sender][_milestoneId];
+        
+        // Ensure milestone uses ERC20 token
+        address tokenAddress = milestone.tokenAddress;
+        if (tokenAddress == address(0)) revert InvalidTokenTransfer();
+        
+        _validateDepositRequirements(msg.sender, _milestoneId, _amount);
+        
+        // For fixed deposits, ensure the amount matches
+        if (milestone.milestoneType == TYPE_FIXED_DEPOSIT && _amount != milestone.fixedAmount) {
+            revert InvalidTokenAmount();
+        }
+        
+        // Calculate fee
+        uint256 fee = (_amount * platformFee) / 10000;
+        uint256 depositAmount = _amount - fee;
+        
+        // Transfer tokens from user to contract
+        IERC20 token = IERC20(tokenAddress);
+        token.safeTransferFrom(msg.sender, address(this), depositAmount);
+        
+        // Transfer fee to treasury
+        if (fee > 0) {
+            token.safeTransferFrom(msg.sender, treasuryAddress, fee);
+        }
+        
+        // Update milestone and user data
+        milestone.currentAmount += depositAmount;
+        users[msg.sender].tokenSavings[tokenAddress] += depositAmount;
+        
+        emit Deposit(msg.sender, _milestoneId, depositAmount, tokenAddress);
+        
+        _checkMilestoneCompletion(msg.sender, _milestoneId);
+    }
+    
+    /**
+     * @dev Validates deposit requirements
+     * @param _user User address
+     * @param _milestoneId Milestone ID
+     * @param _amount Amount being deposited
+     */
+    function _validateDepositRequirements(address _user, uint256 _milestoneId, uint256 _amount) internal view {
+        if (_amount < minSavingsAmount) revert TargetAmountTooLow();
+        if (!users[_user].exists) revert UserDoesNotExist();
+        
+        Milestone storage milestone = milestones[_user][_milestoneId];
+        if (milestone.status != STATUS_ACTIVE) revert MilestoneNotActive();
+        if (milestone.status == STATUS_COMPLETED) revert MilestoneAlreadyCompleted();
+        if (block.timestamp > milestone.deadline) revert MilestoneDeadlinePassed();
+    }
+    
+    /**
+     * @dev Checks if milestone is completed after deposit
+     * @param _user User address
+     * @param _milestoneId Milestone ID
+     */
+    function _checkMilestoneCompletion(address _user, uint256 _milestoneId) internal {
+        Milestone storage milestone = milestones[_user][_milestoneId];
         
         // Check if milestone completed
         if (milestone.currentAmount >= milestone.targetAmount) {
             milestone.status = STATUS_COMPLETED;
-            emit MilestoneCompleted(msg.sender, _milestoneId);
+            emit MilestoneCompleted(_user, _milestoneId);
         }
     }
     
@@ -171,7 +246,15 @@ contract Stashflow is ReentrancyGuard, Ownable, Pausable {
         // Update milestone and user data
         milestone.currentAmount = 0;
         milestone.status = STATUS_INACTIVE;
-        users[msg.sender].totalSavings -= amountToWithdraw;
+        
+        address tokenAddress = milestone.tokenAddress;
+        
+        // Update user's total savings
+        if (tokenAddress == address(0)) {
+            users[msg.sender].totalSavings -= amountToWithdraw;
+        } else {
+            users[msg.sender].tokenSavings[tokenAddress] -= amountToWithdraw;
+        }
         
         // If deadline passed without completing, emit failure event
         if (milestone.status != STATUS_COMPLETED && block.timestamp > milestone.deadline) {
@@ -179,10 +262,16 @@ contract Stashflow is ReentrancyGuard, Ownable, Pausable {
         }
         
         // Transfer funds to user
-        (bool success, ) = msg.sender.call{value: amountToWithdraw}("");
-        if (!success) revert WithdrawalFailed();
+        if (tokenAddress == address(0)) {
+            // Native ETH
+            (bool success, ) = msg.sender.call{value: amountToWithdraw}("");
+            if (!success) revert WithdrawalFailed();
+        } else {
+            // ERC20 token
+            IERC20(tokenAddress).safeTransfer(msg.sender, amountToWithdraw);
+        }
         
-        emit Withdrawal(msg.sender, amountToWithdraw);
+        emit Withdrawal(msg.sender, amountToWithdraw, tokenAddress);
     }
     
     /**
@@ -197,24 +286,39 @@ contract Stashflow is ReentrancyGuard, Ownable, Pausable {
         if (milestone.status == STATUS_COMPLETED) revert MilestoneAlreadyCompleted();
         if (milestone.currentAmount == 0) revert NoFundsToWithdraw();
         
-        // Apply penalty for early withdrawal (5%)
-        uint256 penalty = (milestone.currentAmount * 500) / 10000;
+        // Apply configured penalty for early withdrawal
+        uint256 penalty = (milestone.currentAmount * withdrawalPenalty) / 10000;
         uint256 amountToWithdraw = milestone.currentAmount - penalty;
         
         // Update milestone and user data
         milestone.currentAmount = 0;
         milestone.status = STATUS_INACTIVE;
-        users[msg.sender].totalSavings -= milestone.currentAmount;
         
-        // Transfer penalty to contract owner
-        (bool penaltySuccess, ) = owner().call{value: penalty}("");
-        if (!penaltySuccess) revert PenaltyTransferFailed();
+        address tokenAddress = milestone.tokenAddress;
         
-        // Transfer remaining funds to user
-        (bool success, ) = msg.sender.call{value: amountToWithdraw}("");
-        if (!success) revert EmergencyWithdrawalFailed();
+        // Update user's total savings
+        if (tokenAddress == address(0)) {
+            users[msg.sender].totalSavings -= milestone.currentAmount;
+            
+            // Transfer penalty to treasury
+            (bool penaltySuccess, ) = treasuryAddress.call{value: penalty}("");
+            if (!penaltySuccess) revert PenaltyTransferFailed();
+            
+            // Transfer remaining funds to user
+            (bool success, ) = msg.sender.call{value: amountToWithdraw}("");
+            if (!success) revert EmergencyWithdrawalFailed();
+        } else {
+            users[msg.sender].tokenSavings[tokenAddress] -= milestone.currentAmount;
+            
+            // Transfer penalty to treasury
+            IERC20 token = IERC20(tokenAddress);
+            token.safeTransfer(treasuryAddress, penalty);
+            
+            // Transfer remaining funds to user
+            token.safeTransfer(msg.sender, amountToWithdraw);
+        }
         
-        emit EmergencyWithdrawal(msg.sender, _milestoneId, amountToWithdraw);
+        emit EmergencyWithdrawal(msg.sender, _milestoneId, amountToWithdraw, tokenAddress);
     }
     
     /**
@@ -236,6 +340,9 @@ contract Stashflow is ReentrancyGuard, Ownable, Pausable {
      * @return currentAmount Current amount saved for the milestone
      * @return completed Whether the milestone is completed
      * @return active Whether the milestone is active
+     * @return tokenAddress Address of the token
+     * @return milestoneType Type of milestone (0=fixed, 1=random)
+     * @return fixedAmount Fixed deposit amount (if applicable)
      */
     function getMilestoneDetails(address _user, uint256 _milestoneId) external view returns (
         bytes32 name,
@@ -243,7 +350,10 @@ contract Stashflow is ReentrancyGuard, Ownable, Pausable {
         uint256 deadline,
         uint256 currentAmount,
         bool completed,
-        bool active
+        bool active,
+        address tokenAddress,
+        uint8 milestoneType,
+        uint256 fixedAmount
     ) {
         Milestone storage milestone = milestones[_user][_milestoneId];
         
@@ -256,8 +366,25 @@ contract Stashflow is ReentrancyGuard, Ownable, Pausable {
             milestone.deadline,
             milestone.currentAmount,
             isCompleted,
-            isActive
+            isActive,
+            milestone.tokenAddress,
+            milestone.milestoneType,
+            milestone.fixedAmount
         );
+    }
+    
+    /**
+     * @dev Returns user's total savings in a specific token
+     * @param _user Address of the user
+     * @param _tokenAddress Address of the token (address(0) for native ETH)
+     * @return Total savings in the specified token
+     */
+    function getUserTokenSavings(address _user, address _tokenAddress) external view returns (uint256) {
+        if (_tokenAddress == address(0)) {
+            return users[_user].totalSavings;
+        } else {
+            return users[_user].tokenSavings[_tokenAddress];
+        }
     }
     
     /**
@@ -292,6 +419,56 @@ contract Stashflow is ReentrancyGuard, Ownable, Pausable {
     function setPlatformFee(uint256 _newFee) external onlyOwner {
         if (_newFee > 500) revert FeeTooHigh(); // Max 5%
         platformFee = _newFee;
+    }
+    
+    /**
+     * @dev Updates the withdrawal penalty (only owner)
+     * @param _newPenalty New penalty in basis points (1% = 100)
+     */
+    function setWithdrawalPenalty(uint256 _newPenalty) external onlyOwner {
+        if (_newPenalty > 2000) revert PenaltyTooHigh(); // Max 20%
+        withdrawalPenalty = _newPenalty;
+        emit WithdrawalPenaltyUpdated(_newPenalty);
+    }
+    
+    /**
+     * @dev Updates the treasury address (only owner)
+     * @param _newTreasury New treasury address
+     */
+    function setTreasuryAddress(address _newTreasury) external onlyOwner {
+        require(_newTreasury != address(0), "Treasury cannot be zero address");
+        address oldTreasury = treasuryAddress;
+        treasuryAddress = _newTreasury;
+        emit TreasuryAddressUpdated(oldTreasury, _newTreasury);
+    }
+    
+    /**
+     * @dev Adds a token to the allowed tokens list (only owner)
+     * @param _tokenAddress Address of the token to add
+     */
+    function addAllowedToken(address _tokenAddress) external onlyOwner {
+        require(_tokenAddress != address(0), "Cannot add native token");
+        allowedTokens[_tokenAddress] = true;
+        emit TokenAdded(_tokenAddress);
+    }
+    
+    /**
+     * @dev Removes a token from the allowed tokens list (only owner)
+     * @param _tokenAddress Address of the token to remove
+     */
+    function removeAllowedToken(address _tokenAddress) external onlyOwner {
+        require(_tokenAddress != address(0), "Cannot remove native token");
+        allowedTokens[_tokenAddress] = false;
+        emit TokenRemoved(_tokenAddress);
+    }
+    
+    /**
+     * @dev Checks if a token is allowed
+     * @param _tokenAddress Address of the token to check
+     * @return Whether the token is allowed
+     */
+    function isTokenAllowed(address _tokenAddress) external view returns (bool) {
+        return allowedTokens[_tokenAddress];
     }
     
     /**
