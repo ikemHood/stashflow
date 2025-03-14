@@ -22,7 +22,7 @@ contract Stashflow is ReentrancyGuard, Ownable, Pausable, IStashflow {
     
     // Milestone type constants
     uint8 constant TYPE_FIXED_DEPOSIT = 0;
-    uint8 constant TYPE_RANDOM_DEPOSIT = 1;
+    uint8 constant TYPE_FLEXIBLE_DEPOSIT = 1;
     
     // User structure
     struct User {
@@ -85,7 +85,7 @@ contract Stashflow is ReentrancyGuard, Ownable, Pausable, IStashflow {
         if (_deadline <= block.timestamp) revert DeadlineMustBeInFuture();
         if (!allowedTokens[_tokenAddress]) revert TokenNotAllowed();
         if (_milestoneType == TYPE_FIXED_DEPOSIT && _fixedAmount == 0) revert InvalidFixedDepositAmount();
-        if (_milestoneType > TYPE_RANDOM_DEPOSIT) revert InvalidMilestoneName();
+        if (_milestoneType > TYPE_FLEXIBLE_DEPOSIT) revert InvalidMilestoneName();
     
         // Create user if doesn't exist
         if (!users[msg.sender].exists) {
