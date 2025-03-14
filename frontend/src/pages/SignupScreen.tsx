@@ -31,7 +31,7 @@ const passwordRequirements = [
 ];
 
 const SignupScreen: React.FC = () => {
-    const { signup, isLoading } = useAuth();
+    const { signup, isLoading, accessToken, setAccessToken } = useAuth();
     const navigate = useNavigate();
 
     // State for the current step in the signup flow
@@ -47,6 +47,8 @@ const SignupScreen: React.FC = () => {
     const [pin, setPin] = useState('');
     const [confirmPin, setConfirmPin] = useState('');
     const [isPasswordFocused, setIsPasswordFocused] = useState(false);
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
 
     // Error states
     const [errors, setErrors] = useState({
@@ -154,14 +156,70 @@ const SignupScreen: React.FC = () => {
         if (!validateInitialForm()) return;
 
         // TODO: Integrate API to create user account
-        setCurrentStep(SignupStep.EMAIL_VERIFICATION);
+        try {
+            const response = await fetch(`${API_BASE_URL}/users/signup`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    name,
+                    email,
+                    password,
+                }),
+            });
+    
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to create account');
+            }
+
+            const data = await response.json();
+            setAccessToken(data.data.accessToken);
+            
+    
+            // If the account creation is successful, move to the next step
+            setCurrentStep(SignupStep.EMAIL_VERIFICATION);
+        } catch (error) {
+            console.error('Error creating account:', error);
+            setErrors({
+                ...errors,
+                email: (error instanceof Error ? error.message : 'Failed to create account'),
+            });
+        }
     };
 
-    const handleVerificationSubmit = () => {
+    const handleVerificationSubmit = async () => {
         if (!validateVerificationCode()) return;
 
         // TODO: Integrate API to verify email code
-        setCurrentStep(SignupStep.PIN_SETUP);
+        try {
+            const response = await fetch(`${API_BASE_URL}/users/email/verify`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${accessToken}`,
+                },
+                body: JSON.stringify({
+                    email: email,
+                    code: verificationCode,
+                }),
+            });
+    
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to verify email');
+            }
+    
+            // If the email is verified, move to the next step
+            setCurrentStep(SignupStep.PIN_SETUP);
+        } catch (error) {
+            console.error('Error verifying email:', error);
+            setErrors({
+                ...errors,
+                verificationCode: (error instanceof Error ? error.message : 'Failed to verify email'),
+            });
+        }
     };
 
     const handlePinSubmit = async () => {

@@ -17,6 +17,11 @@ interface AuthContextType {
     login: () => Promise<void>;
     logout: () => void;
     signup: () => Promise<void>;
+
+    accessToken: string | null;
+    setAccessToken: (token: string) => void;
+    refreshToken: string | null;
+    setRefreshToken: (token: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -38,6 +43,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const { disconnect } = useDisconnect();
+
+    const [accessToken, setAccessToken] = useState(localStorage.getItem('accessToken'));
+    const [refreshToken, setRefreshToken] = useState(localStorage.getItem('refreshToken'));
 
     // Update user when wallet connection changes
     useEffect(() => {
@@ -114,6 +122,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         login,
         logout,
         signup,
+        accessToken, 
+        setAccessToken,
+        refreshToken,
+        setRefreshToken
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
