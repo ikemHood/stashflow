@@ -13,18 +13,37 @@ import { useAuth } from '../context/AuthContext';
 import { useMilestones } from '../context/MilestoneContext';
 import { useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
+import { useAccount, useConnect } from 'wagmi';
+import { metaMask } from 'wagmi/connectors';
 
 const HomeScreen: React.FC = () => {
-    const { user, isAuthenticated } = useAuth();
+    const { user, isAuthenticated, accessToken, logout } = useAuth();
     const { milestones, isLoading, error, fetchMilestones } = useMilestones();
     const navigate = useNavigate();
-    const [selectedCurrency, setSelectedCurrency] = useState('USDT');
+    const [selectedCurrency, setSelectedCurrency] = useState('USDT');    
+    const { connect } = useConnect();
+    const { isConnected } = useAccount();
+    
+    
 
     useEffect(() => {
         if (isAuthenticated) {
             fetchMilestones();
         }
-    }, [isAuthenticated, fetchMilestones]);
+    }, [fetchMilestones, isAuthenticated]); 
+
+    useEffect(() => {
+        const storedUser = localStorage.getItem('user');
+        const storedToken = localStorage.getItem('accessToken');
+    
+        if (!storedToken || !storedUser) {
+            navigate({ to: '/login', replace: true });
+        }
+    }, [navigate]); 
+
+    const handlelogout = async  () => {
+        await logout();
+    };
 
     const getGreeting = (): string => {
         const hour = new Date().getHours();
@@ -55,6 +74,10 @@ const HomeScreen: React.FC = () => {
 
     const handleSetGoal = () => {
         navigate({ to: '/add-milestone' });
+    };
+
+    const handleConnectWallet = () => {
+        connect({ connector: metaMask() });
     };
 
     const firstName = user?.name ? user.name.split(' ')[0] : 'User';
@@ -200,7 +223,12 @@ const HomeScreen: React.FC = () => {
 
                     {/* Setup Steps */}
                     <div className="space-y-4">
-                        <button className="w-full bg-white border border-gray-200 rounded-xl p-4 flex items-center text-left hover:bg-gray-50">
+                        
+                    {!isConnected && (
+                        <button 
+                            onClick={handleConnectWallet}
+                            className="w-full bg-white border border-gray-200 rounded-xl p-4 flex items-center text-left hover:bg-gray-50"
+                        >
                             <div className="w-12 h-12 mr-4 flex-shrink-0">
                                 <img src="/assets/wallet.svg" alt="Crypto wallet icon" className="w-full h-full" />
                             </div>
@@ -214,6 +242,7 @@ const HomeScreen: React.FC = () => {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                             </svg>
                         </button>
+                    )}
 
                         <button
                             onClick={handleSetGoal}
@@ -271,7 +300,19 @@ const HomeScreen: React.FC = () => {
                     </svg>
                     <span className="text-xs">Profile</span>
                 </button>
+
+                {/* Logout Button for logout implementation */}
+                <button 
+                    onClick={handlelogout} 
+                    className="flex flex-col items-center text-red-500"
+                >
+                    <svg className="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 11-6 0v-1a3 3 0 016 0z" />
+                    </svg>
+                    <span className="text-xs">Logout</span>
+                </button>
             </div>
+
         </div>
     );
 };
