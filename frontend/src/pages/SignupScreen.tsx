@@ -469,7 +469,7 @@ const SignupScreen: React.FC = () => {
                             </div>
                             <h1 className="text-2xl font-bold text-gray-800 mb-2">Set Your PIN</h1>
                             <p className="text-gray-600">
-                                Create a 4-digit PIN to secure your account
+                                Create a 6-digit PIN to secure your account
                             </p>
                         </div>
 
@@ -493,7 +493,7 @@ const SignupScreen: React.FC = () => {
 
                             <Input
                                 label="Confirm PIN"
-                                placeholder="Re-enter 4-digit PIN"
+                                placeholder="Re-enter 6-digit PIN"
                                 type="password"
                                 maxLength={6}
                                 value={confirmPin}
