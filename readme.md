@@ -169,7 +169,7 @@ This project is licensed under the [MIT License](LICENSE).
 - Twitter: [@StashFlowHQ](https://twitter.com/StashFlowHQ)
 - Discord: [StashFlow Community](https://discord.gg/stashflow)
 
-
+---
 
 <p align="center">
   <sub>Built with ❤️ by the StashFlow team</sub>
@@ -179,4 +179,3 @@ This project is licensed under the [MIT License](LICENSE).
 _StashFlow – The Future of Crypto Savings, Secure and Transparent._
 
 
----
