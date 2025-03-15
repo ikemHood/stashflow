@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { EnvelopeIcon, LockClosedIcon } from '@heroicons/react/24/outline';
 import Input from '../components/Input';
 import Button from '../components/Button';
@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from '@tanstack/react-router';
 import { useAccount, useConnect } from 'wagmi';
 import { metaMask } from 'wagmi/connectors';
+
 
 const LoginScreen: React.FC = () => {
     const { login, isLoading } = useAuth();
@@ -35,12 +36,19 @@ const LoginScreen: React.FC = () => {
         }
 
         try {
-            await login();
+            await login(email, password);
             navigate({ to: '/home' });
         } catch (err) {
             setError('Invalid email or password');
         }
     };
+
+    useEffect(() => {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+            navigate({ to: '/home' });
+        }
+    }, [navigate]);
 
     const handleConnectWallet = () => {
         connect({ connector: metaMask() });

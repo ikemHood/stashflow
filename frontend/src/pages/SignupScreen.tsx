@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     EnvelopeIcon,
     LockClosedIcon,
@@ -31,7 +31,8 @@ const passwordRequirements = [
 ];
 
 const SignupScreen: React.FC = () => {
-    const { signup, isLoading, accessToken, setAccessToken } = useAuth();
+    const { signup, isLoading, accessToken } = useAuth();
+
     const navigate = useNavigate();
 
     // State for the current step in the signup flow
@@ -48,6 +49,14 @@ const SignupScreen: React.FC = () => {
     const [confirmPin, setConfirmPin] = useState('');
     const [isPasswordFocused, setIsPasswordFocused] = useState(false);
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+    // Redirect authenticated users to home
+    useEffect(() => {
+         const storedUser = localStorage.getItem('user');
+         if (storedUser) {
+             navigate({ to: '/home' });
+         }
+     }, [navigate]);
 
 
     // Error states
@@ -138,8 +147,8 @@ const SignupScreen: React.FC = () => {
         let isValid = true;
         const newErrors = { ...errors, pin: '', confirmPin: '' };
 
-        if (!pin.trim() || pin.length !== 4 || !/^\d+$/.test(pin)) {
-            newErrors.pin = 'Please enter a valid 4-digit PIN';
+        if (!pin.trim() || pin.length !== 6 || !/^\d+$/.test(pin)) {
+            newErrors.pin = 'Please enter a valid 6-digit PIN';
             isValid = false;
         }
 
@@ -157,34 +166,12 @@ const SignupScreen: React.FC = () => {
 
         // TODO: Integrate API to create user account
         try {
-            const response = await fetch(`${API_BASE_URL}/users/signup`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    name,
-                    email,
-                    password,
-                }),
-            });
-    
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Failed to create account');
-            }
-
-            const data = await response.json();
-            setAccessToken(data.data.accessToken);
-            
-    
-            // If the account creation is successful, move to the next step
+            await signup(name, email, password); 
             setCurrentStep(SignupStep.EMAIL_VERIFICATION);
         } catch (error) {
-            console.error('Error creating account:', error);
             setErrors({
                 ...errors,
-                email: (error instanceof Error ? error.message : 'Failed to create account'),
+                email: error instanceof Error ? error.message : 'Failed to create account',
             });
         }
     };
@@ -222,32 +209,64 @@ const SignupScreen: React.FC = () => {
         }
     };
 
+
     const handlePinSubmit = async () => {
         if (!validatePin()) return;
 
         try {
-            // TODO: Integrate API to save PIN
-            await signup();
-            setCurrentStep(SignupStep.SUCCESS);
+        const response = await fetch(`${API_BASE_URL}/users/device/pin`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`
+            },
+            body: JSON.stringify({
+                pin,
+            }),
+        });
 
-            // Wait 2 seconds before navigating to the home screen
-            setTimeout(() => {
-                navigate({ to: '/home' });
-            }, 2000);
-        } catch (error) {
-            console.error('Error signing up:', error);
-            setErrors({
-                ...errors,
-                email: 'An account with this email already exists'
-            });
-            // Go back to the initial form
-            setCurrentStep(SignupStep.INITIAL_FORM);
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Failed to set PIN');
         }
+
+        // If the PIN is set successfully, move to the success step
+        setCurrentStep(SignupStep.SUCCESS);
+
+        // Wait 2 seconds before navigating to the home screen
+        setTimeout(() => {
+            navigate({ to: '/home' });
+        }, 2000);
+    } catch (error) {
+        console.error('Error setting PIN:', error);
+        setErrors({
+            ...errors,
+            pin: error instanceof Error ? error.message : 'Failed to set PIN',
+        });
+    }
     };
 
-    const handleResendCode = () => {
+    const handleResendCode = async () => {
         // TODO: Integrate API to resend verification code
-        toast.success('Verification code resent to your email!');
+        try {
+            const response = await fetch(`${API_BASE_URL}/users/email/resend}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${accessToken}`,
+                },
+            });
+    
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to resend verification code');
+            }
+    
+            toast.success('Verification code resent to your email!');
+        } catch (error) {
+            console.error('Error resending verification code:', error);
+            toast.error('Failed to resend verification code');
+        }
     };
 
     // Render the correct step
@@ -457,14 +476,14 @@ const SignupScreen: React.FC = () => {
                         <div className="space-y-5">
                             <Input
                                 label="Create PIN"
-                                placeholder="Enter 4-digit PIN"
+                                placeholder="Enter 6-digit PIN"
                                 type="password"
-                                maxLength={4}
+                                maxLength={6}
                                 value={pin}
                                 onChange={(e) => {
                                     // Only allow digits
                                     const value = e.target.value.replace(/\D/g, '');
-                                    if (value.length <= 4) {
+                                    if (value.length <= 6) {
                                         setPin(value);
                                         if (errors.pin) setErrors({ ...errors, pin: '' });
                                     }
@@ -476,12 +495,12 @@ const SignupScreen: React.FC = () => {
                                 label="Confirm PIN"
                                 placeholder="Re-enter 4-digit PIN"
                                 type="password"
-                                maxLength={4}
+                                maxLength={6}
                                 value={confirmPin}
                                 onChange={(e) => {
                                     // Only allow digits
                                     const value = e.target.value.replace(/\D/g, '');
-                                    if (value.length <= 4) {
+                                    if (value.length <= 6) {
                                         setConfirmPin(value);
                                         if (errors.confirmPin) setErrors({ ...errors, confirmPin: '' });
                                     }
@@ -565,3 +584,4 @@ const SignupScreen: React.FC = () => {
 };
 
 export default SignupScreen; 
+
