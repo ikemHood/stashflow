@@ -28,7 +28,7 @@ interface SetupStep {
 }
 
 const HomeScreen: React.FC = () => {
-    const { user, isAuthenticated, isPinRequired } = useAuth();
+    const { user, isAuthenticated, isPinRequired, logout } = useAuth();
     const { milestones, fetchMilestones } = useMilestones();
     const navigate = useNavigate();
     const { open } = useAppKit();
@@ -81,7 +81,20 @@ const HomeScreen: React.FC = () => {
         if (isAuthenticated) {
             fetchMilestones();
         }
-    }, [isAuthenticated, fetchMilestones]);
+    }, [fetchMilestones, isAuthenticated]);
+
+    useEffect(() => {
+        const storedUser = localStorage.getItem('user');
+        const storedToken = localStorage.getItem('accessToken');
+
+        if (!storedToken || !storedUser) {
+            navigate({ to: '/login', replace: true });
+        }
+    }, [navigate]);
+
+    const handlelogout = async () => {
+        await logout();
+    };
 
     // Update wallet step status based on connection
     useEffect(() => {
@@ -421,7 +434,19 @@ const HomeScreen: React.FC = () => {
                     </svg>
                     <span className="text-xs">Profile</span>
                 </button>
+
+                {/* Logout Button for logout implementation */}
+                <button
+                    onClick={handlelogout}
+                    className="flex flex-col items-center text-red-500"
+                >
+                    <svg className="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 11-6 0v-1a3 3 0 016 0z" />
+                    </svg>
+                    <span className="text-xs">Logout</span>
+                </button>
             </div>
+
         </div>
     );
 };

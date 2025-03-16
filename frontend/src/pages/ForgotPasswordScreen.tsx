@@ -27,6 +27,8 @@ const ForgotPasswordScreen: React.FC = () => {
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
     const validateEmail = (): boolean => {
         if (!email.trim()) {
             setError('Email address is required');
@@ -74,10 +76,35 @@ const ForgotPasswordScreen: React.FC = () => {
         setIsLoading(true);
 
         // TODO: Integrate API for password reset request
-        setTimeout(() => {
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/users/password/forgot`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'                    
+                },
+                body: JSON.stringify({
+                    email                    
+                }),
+            });
+    
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Email credentials not found.');
+            }
+    
+            setTimeout(() => {
+                setIsLoading(false);
+                setCurrentStep(ForgotPasswordStep.VERIFICATION);
+            }, 1500);
+        } catch (error) {
+            console.error('Error verifying email:', error);
+            toast.error('Email credentials not found.');
             setIsLoading(false);
-            setCurrentStep(ForgotPasswordStep.VERIFICATION);
-        }, 1500);
+        }
+
+
+        
     };
 
     const handleVerifyCode = async () => {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     EnvelopeIcon,
     LockClosedIcon,
@@ -31,7 +31,8 @@ const passwordRequirements = [
 ];
 
 const SignupScreen: React.FC = () => {
-    const { signup, isLoading } = useAuth();
+    const { signup, isLoading, accessToken } = useAuth();
+
     const navigate = useNavigate();
 
     // State for the current step in the signup flow
@@ -45,6 +46,16 @@ const SignupScreen: React.FC = () => {
     const [acceptTerms, setAcceptTerms] = useState(false);
     const [verificationCode, setVerificationCode] = useState('');
     const [isPasswordFocused, setIsPasswordFocused] = useState(false);
+    const API_BASE_URL = import.meta.env.VITE_API_URL;
+
+    // Redirect authenticated users to home
+    useEffect(() => {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+            navigate({ to: '/home' });
+        }
+    }, [navigate]);
+
 
     // Error states
     const [errors, setErrors] = useState({
@@ -131,8 +142,15 @@ const SignupScreen: React.FC = () => {
     const handleInitialSubmit = async () => {
         if (!validateInitialForm()) return;
 
-        // TODO: Integrate API to create user account
-        setCurrentStep(SignupStep.EMAIL_VERIFICATION);
+        try {
+            await signup(name, email, password);
+            setCurrentStep(SignupStep.EMAIL_VERIFICATION);
+        } catch (error) {
+            setErrors({
+                ...errors,
+                email: error instanceof Error ? error.message : 'Failed to create account',
+            });
+        }
     };
 
     const handleVerificationSubmit = async () => {
@@ -144,9 +162,6 @@ const SignupScreen: React.FC = () => {
             // Store first name in localStorage for PIN setup screen
             const firstName = name.split(' ')[0];
             localStorage.setItem('firstName', firstName);
-
-            // Complete the signup process
-            await signup();
 
             // Navigate to PIN setup screen
             navigate({ to: '/pin/set' });
@@ -161,9 +176,14 @@ const SignupScreen: React.FC = () => {
         }
     };
 
-    const handleResendCode = () => {
+    const handleResendCode = async () => {
         // TODO: Integrate API to resend verification code
-        toast.success('Verification code resent to your email!');
+        try {
+            toast.success('Verification code resent to your email!');
+        } catch (error) {
+            console.error('Error resending verification code:', error);
+            toast.error('Failed to resend verification code');
+        }
     };
 
     // Render the correct step
@@ -412,4 +432,5 @@ const SignupScreen: React.FC = () => {
     );
 };
 
-export default SignupScreen; 
+export default SignupScreen;
+
