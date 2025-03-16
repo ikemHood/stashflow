@@ -1,0 +1,1 @@
+ALTER TABLE "milestones" ADD COLUMN "contract_milestone_id" numeric NOT NULL;
