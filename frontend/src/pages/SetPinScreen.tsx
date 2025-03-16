@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { KeyIcon } from '@heroicons/react/24/outline';
 import { useNavigate } from '@tanstack/react-router';
 import { useAuth } from '../context/AuthContext';
 import PinInput from '../components/PinInput';
@@ -12,26 +11,15 @@ enum PinSetupStep {
 
 const SetPinScreen: React.FC = () => {
     const navigate = useNavigate();
-    const { isLoading, setPin } = useAuth();
-
-    // State for the current step in the PIN setup flow
+    const { setPin } = useAuth();
     const [currentStep, setCurrentStep] = useState<PinSetupStep>(PinSetupStep.CREATE_PIN);
-
-    // PIN state
     const [pin, setPinValue] = useState('');
     const [confirmPin, setConfirmPin] = useState('');
-
-    // Error state
     const [error, setError] = useState('');
-
-    // Get first name for display
     const firstName = localStorage.getItem('firstName') || 'John';
 
     const handlePinComplete = () => {
-        // Move to confirmation step when PIN is entered
         if (currentStep === PinSetupStep.CREATE_PIN && pin.trim().length === 6) {
-            console.log("Initial PIN complete, moving to confirmation step");
-            // Store a clean version of the PIN
             const cleanPin = pin.trim();
             setPinValue(cleanPin);
             setCurrentStep(PinSetupStep.CONFIRM_PIN);
@@ -50,8 +38,8 @@ const SetPinScreen: React.FC = () => {
         }
 
         try {
-            // Save the PIN
-            await setPin(pin.trim());
+            // Save the PIN with both pin and confirmPin parameters
+            await setPin(pin.trim(), confirmPin.trim());
 
             // Navigate to home page after setting PIN
             navigate({ to: '/home' });

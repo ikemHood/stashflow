@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
-import { LockClosedIcon } from '@heroicons/react/24/outline';
 import { useNavigate } from '@tanstack/react-router';
 import { useAuth } from '../context/AuthContext';
 import PinInput from '../components/PinInput';
 
 const PinVerificationScreen: React.FC = () => {
     const navigate = useNavigate();
-    const { isLoading, verifyPin, logout } = useAuth();
+    const { verifyPin, logout } = useAuth();
 
     // PIN state
     const [pin, setPin] = useState('');
@@ -15,13 +14,8 @@ const PinVerificationScreen: React.FC = () => {
     const [error, setError] = useState('');
 
     const handleVerifyPin = async () => {
-        // Log PIN length for debugging
-        console.log('PIN to verify:', pin, 'length:', pin.length);
 
-        // Ensure proper PIN length check
         if (pin.trim().length !== 6) {
-            console.log("PIN length not 6 digits yet, not verifying");
-            setError('Please enter a valid 6-digit PIN');
             return;
         }
 

@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { milestoneService } from '../lib/api-services';
+import { milestoneService, transactionService } from '../lib/api-services';
 import { CreateMilestoneRequest, Milestone } from '../types/api';
 
+// API-specific milestone hooks that complement the context functionality
 export const useUserMilestones = (userId: string) => {
     return useQuery({
-        queryKey: ['milestones'],
+        queryKey: ['milestones', 'user', userId],
         queryFn: () => milestoneService.getUserMilestones().then(res => res.data),
         enabled: !!userId,
     });
@@ -26,10 +27,8 @@ export const useCreateMilestone = () => {
             milestoneService.createMilestone(data).then(res => res.data),
         onSuccess: (data) => {
             if (data.success && data.data) {
-                // Get current user from cache
                 const currentUser = queryClient.getQueryData<any>(['currentUser']);
                 if (currentUser?.data?.id) {
-                    // Invalidate user milestones query to refetch with the new milestone
                     queryClient.invalidateQueries({
                         queryKey: ['milestones', 'user', currentUser.data.id]
                     });
@@ -47,19 +46,9 @@ export const useUpdateMilestone = () => {
             milestoneService.updateMilestone(milestoneId, data).then(res => res.data),
         onSuccess: (data, variables) => {
             if (data.success && data.data) {
-                // Invalidate the specific milestone
                 queryClient.invalidateQueries({
                     queryKey: ['milestones', variables.milestoneId]
                 });
-
-                // Get current user from cache
-                const currentUser = queryClient.getQueryData<any>(['currentUser']);
-                if (currentUser?.data?.id) {
-                    // Invalidate user milestones
-                    queryClient.invalidateQueries({
-                        queryKey: ['milestones', 'user', currentUser.data.id]
-                    });
-                }
             }
         },
     });
@@ -71,20 +60,66 @@ export const useDeleteMilestone = () => {
     return useMutation({
         mutationFn: (milestoneId: string) =>
             milestoneService.deleteMilestone(milestoneId).then(res => res.data),
-        onSuccess: (data, milestoneId) => {
+        onSuccess: (data) => {
             if (data.success) {
-                // Get current user from cache
                 const currentUser = queryClient.getQueryData<any>(['currentUser']);
                 if (currentUser?.data?.id) {
-                    // Invalidate user milestones query
                     queryClient.invalidateQueries({
                         queryKey: ['milestones', 'user', currentUser.data.id]
                     });
                 }
+            }
+        },
+    });
+};
 
-                // Remove the specific milestone from cache
-                queryClient.removeQueries({
-                    queryKey: ['milestones', milestoneId]
+// Transaction hooks
+export const useDepositToMilestone = () => {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: ({ milestoneId, data }: {
+            milestoneId: string;
+            data: {
+                amount: number,
+                walletAddress?: string,
+                txHash?: string,
+                metadata?: Record<string, any>
+            }
+        }) => transactionService.depositToMilestone(milestoneId, data).then(res => res.data),
+        onSuccess: (data, variables) => {
+            if (data.success) {
+                queryClient.invalidateQueries({
+                    queryKey: ['milestones']
+                });
+                queryClient.invalidateQueries({
+                    queryKey: ['transactions', 'milestone', variables.milestoneId]
+                });
+            }
+        },
+    });
+};
+
+export const useWithdrawFromMilestone = () => {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: ({ milestoneId, data }: {
+            milestoneId: string;
+            data: {
+                amount: number,
+                walletAddress?: string,
+                txHash?: string,
+                metadata?: Record<string, any>
+            }
+        }) => transactionService.withdrawFromMilestone(milestoneId, data).then(res => res.data),
+        onSuccess: (data, variables) => {
+            if (data.success) {
+                queryClient.invalidateQueries({
+                    queryKey: ['milestones']
+                });
+                queryClient.invalidateQueries({
+                    queryKey: ['transactions', 'milestone', variables.milestoneId]
                 });
             }
         },

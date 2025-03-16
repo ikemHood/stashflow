@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import {
     ChevronLeftIcon,
     ChevronDownIcon
@@ -6,9 +6,11 @@ import {
 import Button from '../components/Button';
 import { useNavigate } from '@tanstack/react-router';
 import { useMilestones } from '../context/MilestoneContext';
-import { useCreateMilestone } from '../hooks/useMilestone';
 import { toast } from 'sonner';
 import { TYPE_FIXED_DEPOSIT, TYPE_FLEXIBLE_DEPOSIT } from '../types/StashflowTypes';
+import { useAppKit } from '@reown/appkit/react';
+import { useAccount } from 'wagmi';
+import { TOKEN_CONTRACT_ADDRESS } from '../lib/web3Config';
 
 // Define the steps in the form
 enum FormStep {
@@ -21,8 +23,9 @@ type SavingMethod = 'auto' | 'manual';
 
 const AddMilestoneScreen: React.FC = () => {
     const navigate = useNavigate();
-    const { createMilestone: createContractMilestone, isLoading: isContractLoading } = useMilestones();
-    const { mutateAsync: createBackendMilestone, isPending: isBackendLoading } = useCreateMilestone();
+    const { createMilestone, isLoading } = useMilestones();
+    const { open } = useAppKit();
+    const { isConnected } = useAccount();
 
     // Current step state
     const [currentStep, setCurrentStep] = useState<FormStep>(FormStep.DEFINE_GOAL);
@@ -70,6 +73,7 @@ const AddMilestoneScreen: React.FC = () => {
             };
             reader.readAsDataURL(file);
         }
+        console.log(goalImage);
     };
 
     // Handle image drag and drop
@@ -207,56 +211,38 @@ const AddMilestoneScreen: React.FC = () => {
             // Determine milestone type based on saving method
             const milestoneType = savingMethod === 'auto' ? TYPE_FIXED_DEPOSIT : TYPE_FLEXIBLE_DEPOSIT;
 
-            // Set the token address based on selected stablecoin (in a real app, you'd look this up)
-            // For now, using ETH address as default
-            const tokenAddress = '0x0000000000000000000000000000000000000000';
 
-            // Step 1: Create milestone on the blockchain contract
-            const txResult = await createContractMilestone(
+            const tokenAddress = TOKEN_CONTRACT_ADDRESS;
+
+            const txResult = await createMilestone(
                 name,
                 targetAmount,
                 deadline,
                 tokenAddress,
                 milestoneType,
-                savingMethod === 'auto' ? savingAmount : '0'
+                savingMethod === 'auto' ? savingAmount : '0',
+                {
+                    description,
+                    savingMethod,
+                    savingFrequency: savingMethod === 'auto' ? savingFrequency : undefined,
+                    savingAmount: savingMethod === 'auto' ? savingAmount : undefined,
+                    wallet: selectedWallet,
+                    stablecoin: selectedStablecoin,
+                    goalImage: imagePreview
+                }
             );
 
             if (txResult) {
-                // Step 2: Create milestone on the backend
-                const backendResult = await createBackendMilestone({
-                    title: name,
-                    description: description,
-                    targetAmount: targetAmount,
-                    deadline: endDate,
-                    // Additional metadata for saving method can be added here
-                    metadata: {
-                        savingMethod,
-                        savingFrequency: savingMethod === 'auto' ? savingFrequency : undefined,
-                        savingAmount: savingMethod === 'auto' ? savingAmount : undefined,
-                        wallet: selectedWallet,
-                        stablecoin: selectedStablecoin,
-                        txHash: typeof txResult === 'string' ? txResult : undefined,
-                        goalImage: imagePreview // Include the image data if available
-                    }
-                });
-
-                if (backendResult.success) {
-                    toast.success("Saving goal created successfully!");
-                    navigate({ to: '/home' });
-                } else {
-                    toast.error("Failed to save goal details");
-                }
+                toast.success("Saving goal created successfully!");
+                navigate({ to: '/home' });
             } else {
-                toast.error("Failed to create goal on blockchain");
+                toast.error("Failed to create goal");
             }
         } catch (error) {
             console.error('Error creating goal:', error);
             toast.error("An error occurred while creating your goal");
         }
     };
-
-    // Determine if the current step is loading
-    const isLoading = isContractLoading || isBackendLoading;
 
     // Render the progress indicator
     const renderProgressIndicator = () => (
@@ -455,11 +441,11 @@ const AddMilestoneScreen: React.FC = () => {
 
             <div className="pt-5">
                 <Button
-                    onClick={handleContinue}
+                    onClick={isConnected ? handleContinue : () => open()}
                     fullWidth
                     className="bg-indigo-600 hover:bg-indigo-700 text-white py-4 font-medium"
                 >
-                    Continue
+                    {isConnected ? "Continue" : "Connect Wallet"}
                 </Button>
             </div>
         </div>

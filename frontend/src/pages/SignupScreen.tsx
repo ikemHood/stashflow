@@ -4,17 +4,16 @@ import {
     LockClosedIcon,
     UserIcon,
     CheckIcon,
-    KeyIcon,
-    ShieldCheckIcon
+    ShieldCheckIcon,
 } from '@heroicons/react/24/outline';
 import Input from '../components/Input';
 import Button from '../components/Button';
 import { useAuth } from '../context/AuthContext';
+import { useVerifyEmail, useResendVerificationCode } from '../hooks/useAuth';
 import { useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
 import VerificationCodeInput from '../components/VerificationCodeInput';
 
-// Define the possible steps in the signup flow
 enum SignupStep {
     INITIAL_FORM = 0,
     EMAIL_VERIFICATION = 1,
@@ -31,7 +30,9 @@ const passwordRequirements = [
 ];
 
 const SignupScreen: React.FC = () => {
-    const { signup, isLoading, accessToken } = useAuth();
+    const { signup, isLoading } = useAuth();
+    const verifyEmailMutation = useVerifyEmail();
+    const resendCodeMutation = useResendVerificationCode();
 
     const navigate = useNavigate();
 
@@ -46,7 +47,6 @@ const SignupScreen: React.FC = () => {
     const [acceptTerms, setAcceptTerms] = useState(false);
     const [verificationCode, setVerificationCode] = useState('');
     const [isPasswordFocused, setIsPasswordFocused] = useState(false);
-    const API_BASE_URL = import.meta.env.VITE_API_URL;
 
     // Redirect authenticated users to home
     useEffect(() => {
@@ -55,7 +55,6 @@ const SignupScreen: React.FC = () => {
             navigate({ to: '/home' });
         }
     }, [navigate]);
-
 
     // Error states
     const [errors, setErrors] = useState({
@@ -157,7 +156,8 @@ const SignupScreen: React.FC = () => {
         if (!validateVerificationCode()) return;
 
         try {
-            // TODO: Integrate API to verify email code
+            // Use the verification API
+            await verifyEmailMutation.mutateAsync(verificationCode);
 
             // Store first name in localStorage for PIN setup screen
             const firstName = name.split(' ')[0];
@@ -169,20 +169,18 @@ const SignupScreen: React.FC = () => {
             console.error('Error completing signup:', error);
             setErrors({
                 ...errors,
-                email: 'An account with this email already exists'
+                verificationCode: error instanceof Error ? error.message : 'Invalid verification code'
             });
-            // Go back to the initial form
-            setCurrentStep(SignupStep.INITIAL_FORM);
         }
     };
 
     const handleResendCode = async () => {
-        // TODO: Integrate API to resend verification code
         try {
+            await resendCodeMutation.mutateAsync();
             toast.success('Verification code resent to your email!');
         } catch (error) {
             console.error('Error resending verification code:', error);
-            toast.error('Failed to resend verification code');
+            toast.error(error instanceof Error ? error.message : 'Failed to resend verification code');
         }
     };
 

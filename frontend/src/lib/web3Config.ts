@@ -1,70 +1,19 @@
 import { createConfig, http } from 'wagmi';
-import { mainnet, polygon, optimism, arbitrum, base, sepolia } from 'wagmi/chains'
+import { base, baseSepolia } from 'wagmi/chains'
 
 
 // Create wagmi config with desired chains and connectors
 export const config = createConfig({
-    chains: [sepolia, mainnet, polygon, optimism, arbitrum, base],
+    chains: [baseSepolia, base],
     transports: {
-        [mainnet.id]: http(),
-        [polygon.id]: http(),
-        [optimism.id]: http(),
-        [arbitrum.id]: http(),
+        [baseSepolia.id]: http(),
         [base.id]: http(),
-        [sepolia.id]: http(),
     },
 });
 
-// Contract ABI and address
-// This should match your deployed Stashflow contract
-export const STASHFLOW_CONTRACT_ADDRESS = import.meta.env.VITE_STASHFLOW_CONTRACT_ADDRESS || '';
+export const STASHFLOW_CONTRACT_ADDRESS = import.meta.env.VITE_STASHFLOW_CONTRACT_ADDRESS || '0x882231603DFD16089f987E4cf74021c46A77D1Bc';
+export const TOKEN_CONTRACT_ADDRESS = import.meta.env.VITE_TOKEN_CONTRACT_ADDRESS || '0xFDC9F2fa2345f1aEE20A146D68e5d23F31F71Ea2';
 
-// Complete ABI matching Stashflow.sol contract
-export const STASHFLOW_CONTRACT_ABI = [
-    // Events
-    'event MilestoneCreated(address indexed user, uint256 indexed milestoneId, bytes32 name, uint256 targetAmount, uint256 deadline, address tokenAddress, uint8 milestoneType, uint256 fixedAmount)',
-    'event Deposit(address indexed user, uint256 indexed milestoneId, uint256 amount, address tokenAddress)',
-    'event MilestoneCompleted(address indexed user, uint256 indexed milestoneId)',
-    'event MilestoneFailed(address indexed user, uint256 indexed milestoneId)',
-    'event Withdrawal(address indexed user, uint256 amount, address tokenAddress)',
-    'event EmergencyWithdrawal(address indexed user, uint256 indexed milestoneId, uint256 amount, address tokenAddress)',
-    'event WithdrawalPenaltyUpdated(uint256 newPenalty)',
-    'event TreasuryAddressUpdated(address oldTreasury, address newTreasury)',
-    'event TokenAdded(address indexed tokenAddress)',
-    'event TokenRemoved(address indexed tokenAddress)',
-
-    // Read functions
-    'function getMilestoneDetails(address _user, uint256 _milestoneId) external view returns (bytes32 name, uint256 targetAmount, uint256 deadline, uint256 currentAmount, bool completed, bool active, address tokenAddress, uint8 milestoneType, uint256 fixedAmount)',
-    'function getMilestoneCount(address _user) external view returns (uint256)',
-    'function getUserTokenSavings(address _user, address _tokenAddress) external view returns (uint256)',
-    'function bytes32ToString(bytes32 _bytes32) public pure returns (string)',
-    'function isTokenAllowed(address _tokenAddress) external view returns (bool)',
-    'function platformFee() external view returns (uint256)',
-    'function withdrawalPenalty() external view returns (uint256)',
-    'function minSavingsAmount() external view returns (uint256)',
-    'function treasuryAddress() external view returns (address)',
-    'function allowedTokens(address) external view returns (bool)',
-    'function users(address) external view returns (bool exists, uint256 totalSavings)',
-
-    // Write functions
-    'function createMilestone(bytes32 _name, uint256 _targetAmount, uint256 _deadline, address _tokenAddress, uint8 _milestoneType, uint256 _fixedAmount) external',
-    'function deposit(uint256 _milestoneId) external payable',
-    'function depositToken(uint256 _milestoneId, uint256 _amount) external',
-    'function withdraw(uint256 _milestoneId) external',
-    'function emergencyWithdraw(uint256 _milestoneId) external',
-
-    // Admin functions
-    'function setMinSavingsAmount(uint256 _newMinAmount) external',
-    'function setPlatformFee(uint256 _newFee) external',
-    'function setWithdrawalPenalty(uint256 _newPenalty) external',
-    'function setTreasuryAddress(address _newTreasury) external',
-    'function addAllowedToken(address _tokenAddress) external',
-    'function removeAllowedToken(address _tokenAddress) external',
-    'function pause() external',
-    'function unpause() external'
-];
-
-// Sample ERC20 ABI with the minimum required functions for our application
 export const ERC20_ABI = [
     {
         constant: true,
@@ -106,96 +55,959 @@ export const ERC20_ABI = [
     },
 ];
 
-// Sample ABI for the Stashflow contract (placeholder)
-export const STASHFLOW_CONTRACT_ABI_SAMPLE = [
-    // Milestone functions
+export const STASHFLOW_CONTRACT_ABI = [
     {
-        inputs: [
-            { name: 'name', type: 'bytes32' },
-            { name: 'targetAmount', type: 'uint256' },
-            { name: 'deadline', type: 'uint256' },
-            { name: 'tokenAddress', type: 'address' },
-            { name: 'milestoneType', type: 'uint8' },
-            { name: 'fixedAmount', type: 'uint256' },
+        "inputs": [],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+    },
+    {
+        "inputs": [],
+        "type": "error",
+        "name": "CannotWithdrawBeforeCompletionOrDeadline"
+    },
+    {
+        "inputs": [],
+        "type": "error",
+        "name": "DeadlineMustBeInFuture"
+    },
+    {
+        "inputs": [],
+        "type": "error",
+        "name": "EmergencyWithdrawalFailed"
+    },
+    {
+        "inputs": [],
+        "type": "error",
+        "name": "EnforcedPause"
+    },
+    {
+        "inputs": [],
+        "type": "error",
+        "name": "ExpectedPause"
+    },
+    {
+        "inputs": [],
+        "type": "error",
+        "name": "FeeTooHigh"
+    },
+    {
+        "inputs": [],
+        "type": "error",
+        "name": "FeeTransferFailed"
+    },
+    {
+        "inputs": [],
+        "type": "error",
+        "name": "InvalidFixedDepositAmount"
+    },
+    {
+        "inputs": [],
+        "type": "error",
+        "name": "InvalidMilestoneName"
+    },
+    {
+        "inputs": [],
+        "type": "error",
+        "name": "InvalidTokenAmount"
+    },
+    {
+        "inputs": [],
+        "type": "error",
+        "name": "InvalidTokenTransfer"
+    },
+    {
+        "inputs": [],
+        "type": "error",
+        "name": "MilestoneAlreadyCompleted"
+    },
+    {
+        "inputs": [],
+        "type": "error",
+        "name": "MilestoneDeadlinePassed"
+    },
+    {
+        "inputs": [],
+        "type": "error",
+        "name": "MilestoneNotActive"
+    },
+    {
+        "inputs": [],
+        "type": "error",
+        "name": "NoFundsToWithdraw"
+    },
+    {
+        "inputs": [],
+        "type": "error",
+        "name": "OnlyNativeTokenAllowed"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "owner",
+                "type": "address"
+            }
         ],
-        name: 'createMilestone',
-        outputs: [],
-        stateMutability: 'nonpayable',
-        type: 'function',
+        "type": "error",
+        "name": "OwnableInvalidOwner"
     },
     {
-        inputs: [{ name: 'milestoneId', type: 'uint256' }],
-        name: 'deposit',
-        outputs: [],
-        stateMutability: 'payable',
-        type: 'function',
-    },
-    {
-        inputs: [{ name: 'milestoneId', type: 'uint256' }],
-        name: 'withdraw',
-        outputs: [],
-        stateMutability: 'nonpayable',
-        type: 'function',
-    },
-    {
-        inputs: [{ name: 'milestoneId', type: 'uint256' }],
-        name: 'emergencyWithdraw',
-        outputs: [],
-        stateMutability: 'nonpayable',
-        type: 'function',
-    },
-    // Read functions
-    {
-        inputs: [
-            { name: 'user', type: 'address' },
-            { name: 'milestoneId', type: 'uint256' },
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "account",
+                "type": "address"
+            }
         ],
-        name: 'getMilestoneDetails',
-        outputs: [
-            { name: 'name', type: 'bytes32' },
-            { name: 'targetAmount', type: 'uint256' },
-            { name: 'deadline', type: 'uint256' },
-            { name: 'currentAmount', type: 'uint256' },
-            { name: 'completed', type: 'bool' },
-            { name: 'active', type: 'bool' },
-            { name: 'tokenAddress', type: 'address' },
-            { name: 'milestoneType', type: 'uint8' },
-            { name: 'fixedAmount', type: 'uint256' },
+        "type": "error",
+        "name": "OwnableUnauthorizedAccount"
+    },
+    {
+        "inputs": [],
+        "type": "error",
+        "name": "PenaltyTooHigh"
+    },
+    {
+        "inputs": [],
+        "type": "error",
+        "name": "PenaltyTransferFailed"
+    },
+    {
+        "inputs": [],
+        "type": "error",
+        "name": "ReentrancyGuardReentrantCall"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "token",
+                "type": "address"
+            }
         ],
-        stateMutability: 'view',
-        type: 'function',
+        "type": "error",
+        "name": "SafeERC20FailedOperation"
     },
     {
-        inputs: [{ name: 'user', type: 'address' }],
-        name: 'getMilestoneCount',
-        outputs: [{ name: '', type: 'uint256' }],
-        stateMutability: 'view',
-        type: 'function',
+        "inputs": [],
+        "type": "error",
+        "name": "TargetAmountTooLow"
     },
     {
-        inputs: [],
-        name: 'platformFee',
-        outputs: [{ name: '', type: 'uint256' }],
-        stateMutability: 'view',
-        type: 'function',
+        "inputs": [],
+        "type": "error",
+        "name": "TokenNotAllowed"
     },
     {
-        inputs: [],
-        name: 'withdrawalPenalty',
-        outputs: [{ name: '', type: 'uint256' }],
-        stateMutability: 'view',
-        type: 'function',
+        "inputs": [],
+        "type": "error",
+        "name": "UserDoesNotExist"
     },
+    {
+        "inputs": [],
+        "type": "error",
+        "name": "WithdrawalFailed"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "user",
+                "type": "address",
+                "indexed": true
+            },
+            {
+                "internalType": "uint256",
+                "name": "milestoneId",
+                "type": "uint256",
+                "indexed": true
+            },
+            {
+                "internalType": "uint256",
+                "name": "amount",
+                "type": "uint256",
+                "indexed": false
+            },
+            {
+                "internalType": "address",
+                "name": "tokenAddress",
+                "type": "address",
+                "indexed": false
+            }
+        ],
+        "type": "event",
+        "name": "Deposit",
+        "anonymous": false
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "user",
+                "type": "address",
+                "indexed": true
+            },
+            {
+                "internalType": "uint256",
+                "name": "milestoneId",
+                "type": "uint256",
+                "indexed": true
+            },
+            {
+                "internalType": "uint256",
+                "name": "amount",
+                "type": "uint256",
+                "indexed": false
+            },
+            {
+                "internalType": "address",
+                "name": "tokenAddress",
+                "type": "address",
+                "indexed": false
+            }
+        ],
+        "type": "event",
+        "name": "EmergencyWithdrawal",
+        "anonymous": false
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "user",
+                "type": "address",
+                "indexed": true
+            },
+            {
+                "internalType": "uint256",
+                "name": "milestoneId",
+                "type": "uint256",
+                "indexed": true
+            }
+        ],
+        "type": "event",
+        "name": "MilestoneCompleted",
+        "anonymous": false
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "user",
+                "type": "address",
+                "indexed": true
+            },
+            {
+                "internalType": "uint256",
+                "name": "milestoneId",
+                "type": "uint256",
+                "indexed": true
+            },
+            {
+                "internalType": "bytes32",
+                "name": "name",
+                "type": "bytes32",
+                "indexed": false
+            },
+            {
+                "internalType": "uint256",
+                "name": "targetAmount",
+                "type": "uint256",
+                "indexed": false
+            },
+            {
+                "internalType": "uint256",
+                "name": "deadline",
+                "type": "uint256",
+                "indexed": false
+            },
+            {
+                "internalType": "address",
+                "name": "tokenAddress",
+                "type": "address",
+                "indexed": false
+            },
+            {
+                "internalType": "uint8",
+                "name": "milestoneType",
+                "type": "uint8",
+                "indexed": false
+            },
+            {
+                "internalType": "uint256",
+                "name": "fixedAmount",
+                "type": "uint256",
+                "indexed": false
+            }
+        ],
+        "type": "event",
+        "name": "MilestoneCreated",
+        "anonymous": false
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "user",
+                "type": "address",
+                "indexed": true
+            },
+            {
+                "internalType": "uint256",
+                "name": "milestoneId",
+                "type": "uint256",
+                "indexed": true
+            }
+        ],
+        "type": "event",
+        "name": "MilestoneFailed",
+        "anonymous": false
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "previousOwner",
+                "type": "address",
+                "indexed": true
+            },
+            {
+                "internalType": "address",
+                "name": "newOwner",
+                "type": "address",
+                "indexed": true
+            }
+        ],
+        "type": "event",
+        "name": "OwnershipTransferred",
+        "anonymous": false
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "account",
+                "type": "address",
+                "indexed": false
+            }
+        ],
+        "type": "event",
+        "name": "Paused",
+        "anonymous": false
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "tokenAddress",
+                "type": "address",
+                "indexed": true
+            }
+        ],
+        "type": "event",
+        "name": "TokenAdded",
+        "anonymous": false
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "tokenAddress",
+                "type": "address",
+                "indexed": true
+            }
+        ],
+        "type": "event",
+        "name": "TokenRemoved",
+        "anonymous": false
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "oldTreasury",
+                "type": "address",
+                "indexed": true
+            },
+            {
+                "internalType": "address",
+                "name": "newTreasury",
+                "type": "address",
+                "indexed": true
+            }
+        ],
+        "type": "event",
+        "name": "TreasuryAddressUpdated",
+        "anonymous": false
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "account",
+                "type": "address",
+                "indexed": false
+            }
+        ],
+        "type": "event",
+        "name": "Unpaused",
+        "anonymous": false
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "user",
+                "type": "address",
+                "indexed": true
+            },
+            {
+                "internalType": "uint256",
+                "name": "amount",
+                "type": "uint256",
+                "indexed": false
+            },
+            {
+                "internalType": "address",
+                "name": "tokenAddress",
+                "type": "address",
+                "indexed": false
+            }
+        ],
+        "type": "event",
+        "name": "Withdrawal",
+        "anonymous": false
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "newPenalty",
+                "type": "uint256",
+                "indexed": false
+            }
+        ],
+        "type": "event",
+        "name": "WithdrawalPenaltyUpdated",
+        "anonymous": false
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_tokenAddress",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function",
+        "name": "addAllowedToken"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function",
+        "name": "allowedTokens",
+        "outputs": [
+            {
+                "internalType": "bool",
+                "name": "",
+                "type": "bool"
+            }
+        ]
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes32",
+                "name": "_bytes32",
+                "type": "bytes32"
+            }
+        ],
+        "stateMutability": "pure",
+        "type": "function",
+        "name": "bytes32ToString",
+        "outputs": [
+            {
+                "internalType": "string",
+                "name": "",
+                "type": "string"
+            }
+        ]
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes32",
+                "name": "_name",
+                "type": "bytes32"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_targetAmount",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_deadline",
+                "type": "uint256"
+            },
+            {
+                "internalType": "address",
+                "name": "_tokenAddress",
+                "type": "address"
+            },
+            {
+                "internalType": "uint8",
+                "name": "_milestoneType",
+                "type": "uint8"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_fixedAmount",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function",
+        "name": "createMilestone"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "_milestoneId",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "payable",
+        "type": "function",
+        "name": "deposit"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "_milestoneId",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_amount",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function",
+        "name": "depositToken"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "_milestoneId",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function",
+        "name": "emergencyWithdraw"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_user",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function",
+        "name": "getMilestoneCount",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ]
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_user",
+                "type": "address"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_milestoneId",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function",
+        "name": "getMilestoneDetails",
+        "outputs": [
+            {
+                "internalType": "bytes32",
+                "name": "name",
+                "type": "bytes32"
+            },
+            {
+                "internalType": "uint256",
+                "name": "targetAmount",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "deadline",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "currentAmount",
+                "type": "uint256"
+            },
+            {
+                "internalType": "bool",
+                "name": "completed",
+                "type": "bool"
+            },
+            {
+                "internalType": "bool",
+                "name": "active",
+                "type": "bool"
+            },
+            {
+                "internalType": "address",
+                "name": "tokenAddress",
+                "type": "address"
+            },
+            {
+                "internalType": "uint8",
+                "name": "milestoneType",
+                "type": "uint8"
+            },
+            {
+                "internalType": "uint256",
+                "name": "fixedAmount",
+                "type": "uint256"
+            }
+        ]
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_user",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "_tokenAddress",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function",
+        "name": "getUserTokenSavings",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ]
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_tokenAddress",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function",
+        "name": "isTokenAllowed",
+        "outputs": [
+            {
+                "internalType": "bool",
+                "name": "",
+                "type": "bool"
+            }
+        ]
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            },
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function",
+        "name": "milestones",
+        "outputs": [
+            {
+                "internalType": "bytes32",
+                "name": "name",
+                "type": "bytes32"
+            },
+            {
+                "internalType": "uint256",
+                "name": "targetAmount",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "deadline",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "currentAmount",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint8",
+                "name": "status",
+                "type": "uint8"
+            },
+            {
+                "internalType": "address",
+                "name": "tokenAddress",
+                "type": "address"
+            },
+            {
+                "internalType": "uint8",
+                "name": "milestoneType",
+                "type": "uint8"
+            },
+            {
+                "internalType": "uint256",
+                "name": "fixedAmount",
+                "type": "uint256"
+            }
+        ]
+    },
+    {
+        "inputs": [],
+        "stateMutability": "view",
+        "type": "function",
+        "name": "minSavingsAmount",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ]
+    },
+    {
+        "inputs": [],
+        "stateMutability": "view",
+        "type": "function",
+        "name": "owner",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ]
+    },
+    {
+        "inputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function",
+        "name": "pause"
+    },
+    {
+        "inputs": [],
+        "stateMutability": "view",
+        "type": "function",
+        "name": "paused",
+        "outputs": [
+            {
+                "internalType": "bool",
+                "name": "",
+                "type": "bool"
+            }
+        ]
+    },
+    {
+        "inputs": [],
+        "stateMutability": "view",
+        "type": "function",
+        "name": "platformFee",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ]
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_tokenAddress",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function",
+        "name": "removeAllowedToken"
+    },
+    {
+        "inputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function",
+        "name": "renounceOwnership"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "_newMinAmount",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function",
+        "name": "setMinSavingsAmount"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "_newFee",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function",
+        "name": "setPlatformFee"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_newTreasury",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function",
+        "name": "setTreasuryAddress"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "_newPenalty",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function",
+        "name": "setWithdrawalPenalty"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "newOwner",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function",
+        "name": "transferOwnership"
+    },
+    {
+        "inputs": [],
+        "stateMutability": "view",
+        "type": "function",
+        "name": "treasuryAddress",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ]
+    },
+    {
+        "inputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function",
+        "name": "unpause"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function",
+        "name": "users",
+        "outputs": [
+            {
+                "internalType": "bool",
+                "name": "exists",
+                "type": "bool"
+            },
+            {
+                "internalType": "uint256",
+                "name": "totalSavings",
+                "type": "uint256"
+            }
+        ]
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "_milestoneId",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function",
+        "name": "withdraw"
+    },
+    {
+        "inputs": [],
+        "stateMutability": "view",
+        "type": "function",
+        "name": "withdrawalPenalty",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ]
+    }
 ];
 
-// Contract addresses (placeholder for now)
-export const STASHFLOW_CONTRACT_ADDRESS_SAMPLE = '0x0000000000000000000000000000000000000000';
-
-// Create wagmi config
-export const config_sample = createConfig({
-    chains: [mainnet, sepolia],
-    transports: {
-        [mainnet.id]: http(),
-        [sepolia.id]: http(),
-    },
-}); 

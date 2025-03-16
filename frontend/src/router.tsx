@@ -13,15 +13,13 @@ import WelcomeScreen from './pages/WelcomeScreen';
 import LoginScreen from './pages/LoginScreen';
 import SignupScreen from './pages/SignupScreen';
 import ForgotPasswordScreen from './pages/ForgotPasswordScreen';
-import ForgotPasswordVerificationScreen from './pages/ForgotPasswordVerificationScreen';
 import HomeScreen from './pages/HomeScreen';
 import AddMilestoneScreen from './pages/AddMilestoneScreen';
-import DepositScreen from './pages/DepositScreen';
-import WithdrawScreen from './pages/WithdrawScreen';
 import SetPinScreen from './pages/SetPinScreen';
 import PinVerificationScreen from './pages/PinVerificationScreen';
 import SavingsScreen from './pages/SavingsScreen';
 import MilestoneDetailScreen from './pages/MilestoneDetailScreen';
+import ProfileScreen from './pages/ProfileScreen';
 
 // Create a root layout component
 const RootLayout = () => {
@@ -77,19 +75,6 @@ const forgotPasswordRoute = createRoute({
     component: ForgotPasswordScreen,
 });
 
-const forgotPasswordVerificationRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/verify-email',
-    component: ForgotPasswordVerificationScreen,
-});
-
-const resetPasswordRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/reset-password',
-    // For now, we'll use the ForgotPasswordScreen as a placeholder
-    component: ForgotPasswordScreen,
-});
-
 const homeRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/home',
@@ -115,19 +100,6 @@ const pinVerificationRoute = createRoute({
     component: PinVerificationScreen,
 });
 
-// Routes with parameters
-const depositRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/deposit/$milestoneId',
-    component: DepositScreen,
-});
-
-const withdrawRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/withdraw/$milestoneId',
-    component: WithdrawScreen,
-});
-
 // Add routes for savings screens
 const savingsRoute = createRoute({
     getParentRoute: () => rootRoute,
@@ -141,6 +113,13 @@ const milestoneDetailRoute = createRoute({
     component: MilestoneDetailScreen,
 });
 
+// Add route for profile screen
+const profileRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/profile',
+    component: ProfileScreen,
+});
+
 // Create the router with all routes
 const routeTree = rootRoute.addChildren([
     splashRoute,
@@ -148,16 +127,13 @@ const routeTree = rootRoute.addChildren([
     loginRoute,
     signupRoute,
     forgotPasswordRoute,
-    forgotPasswordVerificationRoute,
-    resetPasswordRoute,
     homeRoute,
     addMilestoneRoute,
-    depositRoute,
-    withdrawRoute,
     setPinRoute,
     pinVerificationRoute,
     savingsRoute,
     milestoneDetailRoute,
+    profileRoute,
 ]);
 
 export const router = createRouter({

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { BackspaceIcon, ArrowRightIcon, XCircleIcon } from '@heroicons/react/24/outline';
 
 interface PinInputProps {
@@ -22,16 +22,6 @@ const PinInput: React.FC<PinInputProps> = ({
     maxLength = 6,
     pinLabel = "Enter your PIN"
 }) => {
-    // Track if we've reached max length to avoid duplicate triggering
-    const [hasTriggeredComplete, setHasTriggeredComplete] = useState(false);
-
-    // Reset the trigger state when value changes
-    useEffect(() => {
-        if (value.length < maxLength) {
-            setHasTriggeredComplete(false);
-        }
-    }, [value, maxLength]);
-
     const handleDigitClick = (digit: string) => {
         if (value.length < maxLength) {
             // Calculate new value
@@ -40,13 +30,7 @@ const PinInput: React.FC<PinInputProps> = ({
             // Update the value via onChange
             onChange(newValue);
 
-            // Check if we've reached the max length and haven't triggered yet
-            if (newValue.length === maxLength && onComplete && !hasTriggeredComplete) {
-                console.log("Max length reached, triggering onComplete");
-                // Mark as triggered to avoid duplicate calls
-                setHasTriggeredComplete(true);
-
-                // Small delay to ensure state is updated before completing
+            if (newValue.length === maxLength && onComplete) {
                 setTimeout(() => {
                     onComplete();
                 }, 300);

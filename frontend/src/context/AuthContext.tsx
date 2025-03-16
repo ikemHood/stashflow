@@ -1,17 +1,21 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useAccount, useDisconnect } from 'wagmi';
 import { useNavigate } from '@tanstack/react-router';
-import { parseApiError, handleAuthError } from '../lib/error-handlers';
+import { handleAuthError } from '../lib/error-handlers';
+import { userService } from '../lib/api-services';
+import { User as ApiUser, UserLoginRequest, UserRegisterRequest } from '../types/api';
+import axios from 'axios';
+import { readContract } from 'wagmi/actions';
+import { STASHFLOW_CONTRACT_ABI, STASHFLOW_CONTRACT_ADDRESS, TOKEN_CONTRACT_ADDRESS, config } from '../lib/web3Config';
+import { formatWeiToEth } from '../utils/helpers';
+import { getAddress, isAddress } from 'viem';
 
 
-interface User {
-    id: string;
-    name: string;
-    email: string;
-    address: string;
-    balance: string;
+// Extended User interface that combines the API User type with additional properties we need
+interface User extends ApiUser {
+    address?: string;
+    balance?: string;
     hasSetPin?: boolean;
-    isVerified?: boolean;
 }
 
 interface AuthContextType {
@@ -24,14 +28,14 @@ interface AuthContextType {
     refreshToken: string | null;
 
     login: (email: string, password: string) => Promise<void>;
-    logout: () => void;
-    signup: () => Promise<void>;
-    setPin: (pin: string) => Promise<void>;
+    logout: () => Promise<void>;
+    signup: (name: string, email: string, password: string) => Promise<void>;
+    setPin: (pin: string, confirmPin: string) => Promise<void>;
     verifyPin: (pin: string) => Promise<boolean>;
     setRefreshToken: (token: string | null) => void;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const useAuth = () => {
     const context = useContext(AuthContext);
@@ -55,37 +59,82 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const { disconnect } = useDisconnect();
     const navigate = useNavigate();
 
-    // Define API URL
-    const API_BASE_URL = import.meta.env.VITE_API_URL;
-
     // Check if the user has set a PIN
     const hasSetPin = user?.hasSetPin || false;
 
-    // Simulate token expiration to test PIN verification flow
+    // Refresh token if it exists but access token is missing or expired
+    const refreshTokenIfNeeded = async (): Promise<boolean> => {
+        const storedRefreshToken = localStorage.getItem('refreshToken');
+
+        if (!storedRefreshToken) {
+            // No refresh token, nothing we can do
+            return false;
+        }
+
+        setIsPinRequired(true);
+        navigate({ to: '/pin/verify' });
+        return false;
+    };
+
+    // Token expiration handler
     useEffect(() => {
-        if (user && hasSetPin) {
-            // Simulate token expiration after 30 minutes
-            const tokenExpirationTimer = setTimeout(() => {
-                setIsPinRequired(true);
+        if (user && hasSetPin && accessToken) {
+            // Set up a timer to check token expiration periodically
+            const tokenCheckInterval = setInterval(async () => {
+                try {
+                    // Try a simple API call to see if the token is still valid
+                    await userService.getCurrentUser();
+                } catch (error) {
+                    if (axios.isAxiosError(error) && error.response?.status === 401) {
+                        // If token is expired, try to refresh it
+                        const refreshed = await refreshTokenIfNeeded();
+
+                        // If refresh fails, require PIN verification
+                        if (!refreshed) {
+                            setIsPinRequired(true);
+                        }
+                    }
+                }
             }, 15 * 60 * 1000); // 15 minutes
 
-            return () => clearTimeout(tokenExpirationTimer);
+            return () => clearInterval(tokenCheckInterval);
         }
-    }, [user, hasSetPin]);
+    }, [user, hasSetPin, accessToken]);
 
     // Update user when wallet connection changes
     useEffect(() => {
-        if (isConnected && address) {
-            setUser({
-                id: '1',
-                name: 'User',
-                email: 'user@example.com',
-                address,
-                balance: '0.0',
-                hasSetPin: false // By default, new connections haven't set a PIN
-            });
-        } else {
-            setUser(null);
+        // When a wallet is connected, update user's address and fetch balance
+        if (isConnected && address && user) {
+            const fetchUserBalance = async () => {
+                try {
+                    if (!isAddress(address)) return;
+                    // Call the contract to get user's total savings in ETH
+                    const totalSavings = await readContract(config, {
+                        abi: STASHFLOW_CONTRACT_ABI,
+                        address: getAddress(STASHFLOW_CONTRACT_ADDRESS),
+                        functionName: 'getUserTokenSavings',
+                        args: [getAddress(address), getAddress(TOKEN_CONTRACT_ADDRESS)],
+                        account: getAddress(address),
+                    });
+
+                    // Format and update user with balance from contract
+                    const formattedBalance = formatWeiToEth(totalSavings as bigint);
+
+                    setUser({
+                        ...user,
+                        address,
+                        balance: formattedBalance
+                    });
+                } catch (error) {
+                    console.error('Error fetching user balance:', error);
+                    setUser({
+                        ...user,
+                        address
+                    });
+                }
+            };
+
+            fetchUserBalance();
         }
     }, [isConnected, address]);
 
@@ -120,110 +169,183 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setIsLoading(true);
 
         try {
-            // Make API call to login endpoint
-            const apiResponse = await fetch(`${API_BASE_URL}/users/login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password, deviceName: "string" }),
-            });
+            // Collect device information
+            const deviceInfo = getDeviceInfo();
 
-            if (!apiResponse.ok) {
-                const error = await parseApiError(apiResponse);
-                throw new Error(error.message || 'Failed to login');
-            }
-
-            const data = await apiResponse.json();
-
-            // Store tokens
-            setAccessToken(data.data.accessToken);
-            localStorage.setItem('accessToken', data.data.accessToken);
-
-            setRefreshToken(data.data.refreshToken);
-            localStorage.setItem('refreshToken', data.data.refreshToken);
-
-            // Update user state properly
-            const newUser = {
-                id: data.data.user.id,
-                name: data.data.user.name,
-                email: data.data.user.email,
-                address: data.data.user.address || '',
-                balance: data.data.user.balance || '0',
-                isVerified: data.data.user.isVerified || false,
-                hasSetPin: data.data.user.hasSetPin || false
+            // Use the userService for login
+            const loginRequest: UserLoginRequest = {
+                email,
+                password,
+                deviceName: deviceInfo.deviceName,
             };
 
+            const response = await userService.login(loginRequest);
+
+            if (!response.data.success || !response.data.data) {
+                throw new Error(response.data.message || 'Login failed');
+            }
+
+            const authData = response.data.data;
+
+            // Store tokens
+            setAccessToken(authData.accessToken);
+            localStorage.setItem('accessToken', authData.accessToken);
+
+            setRefreshToken(authData.refreshToken);
+            localStorage.setItem('refreshToken', authData.refreshToken);
+
+            const newUser: User = {
+                ...authData.user,
+                address: '', // Initialize with empty string since the API User doesn't have this
+                balance: '0', // Initialize with zero balance
+                hasSetPin: !authData.isPinRequired // If PIN is not required, user has set it
+            };
+
+            setIsPinRequired(authData.isPinRequired);
             setUser(newUser);
             localStorage.setItem('user', JSON.stringify(newUser));
 
         } catch (error) {
             console.error('Login failed:', error);
             handleAuthError(error, 'Login failed');
-            throw error; // Ensure error handling in UI
+            throw error;
         } finally {
             setIsLoading(false);
         }
     };
 
-    // Logout function
-    const logout = () => {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        localStorage.removeItem('user');
-        setAccessToken(null);
-        setRefreshToken(null);
-        setUser(null);
-        setIsPinRequired(false);
-        disconnect();
-        navigate({ to: '/login' });
+    // Helper function to get device information
+    const getDeviceInfo = () => {
+        const ua = navigator.userAgent;
+        let deviceType = 'desktop';
+        let osName = 'Unknown OS';
+        let browserName = 'Unknown Browser';
+
+        // Detect device type
+        if (/iPad|iPhone|iPod/.test(ua)) {
+            deviceType = 'mobile';
+        } else if (/Android/.test(ua)) {
+            deviceType = /Mobile/.test(ua) ? 'mobile' : 'tablet';
+        } else if (/iPad|Android|Touch/.test(ua)) {
+            deviceType = 'tablet';
+        }
+
+        // Detect OS
+        if (ua.indexOf('Windows') > -1) {
+            osName = 'Windows';
+        } else if (ua.indexOf('Mac') > -1) {
+            osName = 'MacOS';
+        } else if (ua.indexOf('Linux') > -1) {
+            osName = 'Linux';
+        } else if (ua.indexOf('Android') > -1) {
+            osName = 'Android';
+        } else if (/iPad|iPhone|iPod/.test(ua)) {
+            osName = 'iOS';
+        }
+
+        // Detect browser
+        if (ua.indexOf('Chrome') > -1 && ua.indexOf('Edg') === -1) {
+            browserName = 'Chrome';
+        } else if (ua.indexOf('Firefox') > -1) {
+            browserName = 'Firefox';
+        } else if (ua.indexOf('Safari') > -1 && ua.indexOf('Chrome') === -1) {
+            browserName = 'Safari';
+        } else if (ua.indexOf('Edg') > -1) {
+            browserName = 'Edge';
+        } else if (ua.indexOf('MSIE') > -1 || ua.indexOf('Trident/') > -1) {
+            browserName = 'Internet Explorer';
+        }
+
+        return {
+            deviceType,
+            osName,
+            browserName,
+            userAgent: ua,
+            deviceName: `${osName} - ${browserName}`
+        };
     };
 
-    // Signup function
-    const signup = async (): Promise<void> => {
+    // Logout function
+    const logout = async (): Promise<void> => {
         setIsLoading(true);
 
         try {
-            // For now we're keeping this simple simulation
-            // In a real implementation, you would make an API call like:
-            /*
-            const apiResponse = await fetch(`${API_BASE_URL}/users/signup`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, email, password }),
-            });
-    
-            if (!apiResponse.ok) {
-                const error = await parseApiError(apiResponse);
-                throw new Error(error.message || 'Failed to create account');
+            // Call the logout API endpoint
+            await userService.logout();
+
+            // Clean up local state regardless of API success
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+            localStorage.removeItem('user');
+
+            setAccessToken(null);
+            setRefreshToken(null);
+            setUser(null);
+            setIsPinRequired(false);
+
+            // Disconnect wallet if connected
+            disconnect();
+
+            // Navigate to login page
+            navigate({ to: '/login' });
+        } catch (error) {
+            console.error('Logout error:', error);
+
+            // Even if API call fails, we should still clean up local state
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+            localStorage.removeItem('user');
+
+            setAccessToken(null);
+            setRefreshToken(null);
+            setUser(null);
+            setIsPinRequired(false);
+
+            // Navigate to login page
+            navigate({ to: '/login' });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // Signup function
+    const signup = async (name: string, email: string, password: string): Promise<void> => {
+        setIsLoading(true);
+
+        try {
+            // Use the userService for registration
+            const registerRequest: UserRegisterRequest = {
+                username: name, // API expects username, not name
+                email,
+                password
+            };
+
+            const response = await userService.register(registerRequest);
+
+            if (!response.data.success || !response.data.data) {
+                throw new Error(response.data.message || 'Registration failed');
             }
-            
-            const data = await apiResponse.json();
-            */
 
-            // For demo, simulate API response
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            const authData = response.data.data;
 
-            // Successfully signed up, simulate user data
-            if (address) {
-                setUser({
-                    id: 'new-user-id',
-                    name: 'New User',
-                    email: 'newuser@example.com',
-                    address,
-                    balance: '0',
-                    hasSetPin: false,
-                    isVerified: false
-                });
-            }
+            // Store tokens
+            setAccessToken(authData.accessToken);
+            localStorage.setItem('accessToken', authData.accessToken);
 
-            // Set simulated tokens - in a real app these would come from the API
-            const simulatedAccessToken = 'simulated-access-token-' + Date.now();
-            const simulatedRefreshToken = 'simulated-refresh-token-' + Date.now();
+            setRefreshToken(authData.refreshToken);
+            localStorage.setItem('refreshToken', authData.refreshToken);
 
-            setAccessToken(simulatedAccessToken);
-            localStorage.setItem('accessToken', simulatedAccessToken);
+            // Update user state with the API user and additional properties
+            const newUser: User = {
+                ...authData.user,
+                address: '', // Initialize with empty string
+                balance: '0', // Initialize with zero balance
+                hasSetPin: !authData.isPinRequired // If PIN is not required, user has set it
+            };
 
-            setRefreshToken(simulatedRefreshToken);
-            localStorage.setItem('refreshToken', simulatedRefreshToken);
+            setUser(newUser);
+            localStorage.setItem('user', JSON.stringify(newUser));
+
         } catch (error) {
             console.error('Signup failed:', error);
             handleAuthError(error, 'Signup failed');
@@ -234,12 +356,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
 
     // Set PIN function
-    const setPin = async (pin: string): Promise<void> => {
+    const setPin = async (pin: string, confirmPin: string): Promise<void> => {
         setIsLoading(true);
 
         try {
-            // TODO: Integrate API to save PIN
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            // Use the userService to set the device PIN
+            const response = await userService.setDevicePin(pin, confirmPin);
+
+            if (!response.data.success) {
+                throw new Error(response.data.message || 'Failed to set PIN');
+            }
 
             // Update user with hasSetPin: true
             if (user) {
@@ -250,30 +376,52 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 setUser(updatedUser);
                 localStorage.setItem('user', JSON.stringify(updatedUser));
             }
+        } catch (error) {
+            console.error('Setting PIN failed:', error);
+            handleAuthError(error, 'Failed to set PIN');
+            throw error;
         } finally {
             setIsLoading(false);
         }
     };
 
-    // Verify PIN function
+    // Verify PIN function - used to verify PIN and refresh tokens
     const verifyPin = async (pin: string): Promise<boolean> => {
         setIsLoading(true);
 
         try {
-            // TODO: Integrate API to verify PIN and refresh token
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            const storedRefreshToken = refreshToken || localStorage.getItem('refreshToken');
 
-            // For demo, make sure we have a clean, 6-digit PIN
-            const cleanPin = pin.trim();
-            const isValid = cleanPin.length === 6 && /^\d+$/.test(cleanPin);
+            if (!storedRefreshToken) {
+                throw new Error('No refresh token available');
+            }
 
-            console.log("PIN validation result:", isValid);
+            // Call refresh token with PIN for verification
+            const response = await userService.refreshToken(storedRefreshToken, pin);
 
-            if (isValid) {
+            if (response.data.success && response.data.data) {
+                const { accessToken: newAccessToken, refreshToken: newRefreshToken } = response.data.data;
+
+                // Update tokens
+                if (newAccessToken) {
+                    setAccessToken(newAccessToken);
+                    localStorage.setItem('accessToken', newAccessToken);
+                }
+
+                if (newRefreshToken) {
+                    setRefreshToken(newRefreshToken);
+                    localStorage.setItem('refreshToken', newRefreshToken);
+                }
+
+                // Reset PIN required flag
                 setIsPinRequired(false);
                 return true;
             }
 
+            return false;
+        } catch (error) {
+            console.error('PIN verification failed:', error);
+            handleAuthError(error, 'PIN verification failed');
             return false;
         } finally {
             setIsLoading(false);

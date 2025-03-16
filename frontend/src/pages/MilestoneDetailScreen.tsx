@@ -9,6 +9,13 @@ import { formatCurrency } from '../utils/formatters';
 import { calculateDaysLeft, calculateProgressPercentage } from '../utils/calculations';
 import { isMilestoneCompleted } from '../utils/milestoneUtils';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { useMilestoneTransactions } from '../hooks/useTransaction';
+import {
+    ArrowDownTrayIcon,
+    ArrowUpTrayIcon,
+    ClockIcon,
+    ExclamationCircleIcon
+} from '@heroicons/react/24/outline';
 
 // Format date to display in a user-friendly way
 const formatDate = (dateString: string) => {
@@ -24,13 +31,23 @@ const formatDate = (dateString: string) => {
 const formatTransactionType = (type: string) => {
     switch (type.toUpperCase()) {
         case 'DEPOSIT':
-            return 'Deposit';
+            return {
+                label: 'Deposit',
+                icon: <ArrowDownTrayIcon className="w-4 h-4 text-green-500" />,
+                textColor: 'text-green-500'
+            };
         case 'WITHDRAWAL':
-            return 'Withdrawal';
-        case 'TRANSFER':
-            return 'Transfer';
+            return {
+                label: 'Withdrawal',
+                icon: <ArrowUpTrayIcon className="w-4 h-4 text-red-500" />,
+                textColor: 'text-red-500'
+            };
         default:
-            return type;
+            return {
+                label: type,
+                icon: <ClockIcon className="w-4 h-4 text-gray-500" />,
+                textColor: 'text-gray-500'
+            };
     }
 };
 
@@ -46,6 +63,7 @@ const MilestoneDetailScreen: React.FC = () => {
         depositToMilestone,
         approveTokenForContract
     } = useMilestones();
+    const { data: transactionsData } = useMilestoneTransactions(milestoneId);
 
     const [milestone, setMilestone] = useState<MergedMilestone | null>(null);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -53,14 +71,16 @@ const MilestoneDetailScreen: React.FC = () => {
     const [showDepositConfirm, setShowDepositConfirm] = useState(false);
     const [withdrawLoading, setWithdrawLoading] = useState(false);
     const [depositLoading, setDepositLoading] = useState(false);
-    const [withdrawAmount, setWithdrawAmount] = useState<string>('');
     const [depositAmount, setDepositAmount] = useState<string>('');
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         const loadMilestones = async () => {
             try {
-                await fetchMilestones();
+                // Only fetch if needed - reduce unnecessary API calls
+                if (milestones.length === 0) {
+                    await fetchMilestones();
+                }
             } catch (err) {
                 console.error('Failed to fetch milestones:', err);
                 setError('Failed to load milestones');
@@ -68,7 +88,7 @@ const MilestoneDetailScreen: React.FC = () => {
         };
 
         loadMilestones();
-    }, [fetchMilestones]);
+    }, [fetchMilestones, milestones.length]);
 
     useEffect(() => {
         // Find the milestone with the matching ID
@@ -76,40 +96,51 @@ const MilestoneDetailScreen: React.FC = () => {
             const found = milestones.find(m => m.id === milestoneId);
             if (found) {
                 setMilestone(found);
-
-                // In a real app, you would fetch transactions for this milestone
-                // For now, use mock data
-                const mockTransactions: Transaction[] = [
-                    {
-                        id: '1',
-                        userId: found.userId,
-                        walletId: 'wallet123',
-                        type: 'DEPOSIT',
-                        amount: '50',
-                        status: 'COMPLETED',
-                        txHash: '0x123abc',
-                        createdAt: new Date().toISOString(),
-                        updatedAt: new Date().toISOString()
-                    }
-                ];
-
-                setTransactions(mockTransactions);
+                // Reset error if we found a milestone
+                setError(null);
             } else {
                 setError('Milestone not found');
             }
         }
     }, [milestoneId, milestones]);
 
+    useEffect(() => {
+        if (transactionsData?.success && transactionsData.data) {
+            setTransactions(transactionsData.data.data || []);
+        } else if (transactionsData && !transactionsData.success) {
+            // Only set error for transaction data if we don't already have an error
+            if (!error) {
+                setError('Failed to load transaction history');
+            }
+            // Keep existing transaction data if any
+            if (transactions.length === 0) {
+                // Use mock data as fallback
+                const mockTransactions: Transaction[] = [
+                    {
+                        id: '1',
+                        userId: milestone?.userId || 'unknown',
+                        walletId: 'wallet123',
+                        type: 'DEPOSIT',
+                        amount: '10',
+                        status: 'COMPLETED',
+                        txHash: '0x123abc',
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString()
+                    }
+                ];
+                setTransactions(mockTransactions);
+            }
+        }
+    }, [transactionsData, milestone, error, transactions.length]);
+
     const handleWithdraw = async () => {
         setShowWithdrawConfirm(true);
     };
 
     const handleDeposit = () => {
-        // For automatic savings, use the fixed amount
         if (milestone?.savingMethod === 'AUTOMATIC' && milestone.fixedAmount) {
             handleConfirmDeposit(milestone.fixedAmount);
         } else {
-            // For manual savings, show the deposit modal
             setShowDepositConfirm(true);
         }
     };
@@ -191,7 +222,6 @@ const MilestoneDetailScreen: React.FC = () => {
 
     const closeWithdrawModal = () => {
         setShowWithdrawConfirm(false);
-        setWithdrawAmount('');
         setError(null);
     };
 
@@ -244,16 +274,13 @@ const MilestoneDetailScreen: React.FC = () => {
             </div>
 
             <div className="flex-1 overflow-auto">
-                {/* Goal Image */}
-                {milestone.image && (
-                    <div className="w-full h-48 bg-gray-200">
-                        <img
-                            src={milestone.image}
-                            alt={milestone.name}
-                            className="w-full h-full object-cover"
-                        />
-                    </div>
-                )}
+                <div className="w-full h-48 bg-gray-200">
+                    <img
+                        src="/assets/target.png"
+                        alt={milestone.name}
+                        className="w-full h-full object-cover"
+                    />
+                </div>
 
                 {/* Goal Information */}
                 <div className="bg-white p-4 mb-4">
@@ -346,7 +373,7 @@ const MilestoneDetailScreen: React.FC = () => {
                                 <div key={transaction.id} className="py-3">
                                     <div className="flex justify-between">
                                         <span className="font-medium">
-                                            {formatTransactionType(transaction.type)}
+                                            {formatTransactionType(transaction.type).label}
                                         </span>
                                         <span className={`font-medium ${transaction.type === 'DEPOSIT' ? 'text-green-600' : 'text-red-600'
                                             }`}>
@@ -373,57 +400,37 @@ const MilestoneDetailScreen: React.FC = () => {
             {showWithdrawConfirm && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
                     <div className="bg-white rounded-xl p-6 w-full max-w-md">
-                        <h3 className="text-xl font-bold mb-4">
-                            {isMilestoneCompleted(milestone)
-                                ? 'Withdraw Funds'
-                                : 'Emergency Withdrawal'}
-                        </h3>
-
-                        {error && (
-                            <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-lg">
-                                {error}
+                        <div className="flex flex-col items-center mb-6">
+                            <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mb-4">
+                                <ExclamationCircleIcon className="w-8 h-8 text-red-500" />
                             </div>
-                        )}
-
-                        {!isMilestoneCompleted(milestone) && (
-                            <div className="mb-4 p-3 bg-yellow-50 rounded-lg">
-                                <p className="text-yellow-800 text-sm font-medium">Warning: Early Withdrawal</p>
-                                <p className="text-yellow-700 text-sm mt-1">
-                                    This goal is not yet completed. Withdrawing now will incur a penalty of {milestone.withdrawalPenalty || 5}%.
-                                </p>
-                            </div>
-                        )}
-
-                        <div className="mb-6">
-                            <p className="text-gray-700 mb-2">
-                                Available Balance: <span className="font-medium">{formatCurrency(milestone.currentAmount)}</span>
-                            </p>
+                            <h3 className="text-xl font-bold text-center">
+                                Are You Sure?
+                            </h3>
 
                             {!isMilestoneCompleted(milestone) && (
-                                <p className="text-gray-700 text-sm">
-                                    You will receive approximately: <span className="font-medium">
-                                        {formatCurrency(parseFloat(milestone.currentAmount) * 0.95)}
-                                    </span>
+                                <p className="text-center text-gray-600 mt-2">
+                                    Withdrawing before your goal is complete may result in {milestone.withdrawalPenalty || 5}% deduction
                                 </p>
                             )}
                         </div>
 
-                        <div className="flex justify-end space-x-3">
+                        <div className="flex justify-between space-x-3 mt-6">
                             <Button
                                 onClick={closeWithdrawModal}
                                 variant="secondary"
                                 disabled={withdrawLoading}
+                                fullWidth
                             >
                                 Cancel
                             </Button>
                             <Button
                                 onClick={handleConfirmWithdraw}
                                 loading={withdrawLoading}
-                                variant={!isMilestoneCompleted(milestone) ? "warning" : "primary"}
+                                variant="primary"
+                                fullWidth
                             >
-                                {isMilestoneCompleted(milestone)
-                                    ? 'Withdraw'
-                                    : 'Withdraw with Penalty'}
+                                Withdraw
                             </Button>
                         </div>
                     </div>

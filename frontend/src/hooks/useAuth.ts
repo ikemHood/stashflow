@@ -1,7 +1,12 @@
+
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { userService } from '../lib/api-services';
 import { User, UserLoginRequest, UserRegisterRequest } from '../types/api';
-import { Navigate } from '@tanstack/react-router';
+import { Navigate, useNavigate } from '@tanstack/react-router';
+import { toast } from 'sonner';
+
+// Export the main useAuth hook from the AuthContext
+export { useAuth } from '../context/AuthContext';
 
 export const useLogin = () => {
     const queryClient = useQueryClient();
@@ -12,8 +17,8 @@ export const useLogin = () => {
         onSuccess: (data) => {
             if (data.success && data.data) {
                 // Store the tokens
-                localStorage.setItem('access_token', data.data.accessToken);
-                localStorage.setItem('refresh_token', data.data.refreshToken);
+                localStorage.setItem('accessToken', data.data.accessToken);
+                localStorage.setItem('refreshToken', data.data.refreshToken);
 
                 // Store user data
                 localStorage.setItem('user', JSON.stringify(data.data.user));
@@ -24,7 +29,6 @@ export const useLogin = () => {
                     data: data.data.user
                 });
 
-                // Check if PIN verification is required
                 if (data.data.isPinRequired) {
                     Navigate({ to: '/pin/set' });
                 }
@@ -42,8 +46,8 @@ export const useRegister = () => {
         onSuccess: (data) => {
             if (data.success && data.data) {
                 // Store the tokens
-                localStorage.setItem('access_token', data.data.accessToken);
-                localStorage.setItem('refresh_token', data.data.refreshToken);
+                localStorage.setItem('accessToken', data.data.accessToken);
+                localStorage.setItem('refreshToken', data.data.refreshToken);
 
                 // Store user data
                 localStorage.setItem('user', JSON.stringify(data.data.user));
@@ -66,9 +70,15 @@ export const useRegister = () => {
 export const useCurrentUser = () => {
     return useQuery({
         queryKey: ['currentUser'],
-        queryFn: () => userService.getCurrentUser().then(res => res.data),
+        queryFn: async () => {
+            const response = await userService.getCurrentUser();
+            return {
+                success: response.data.success,
+                data: response.data.data as User
+            };
+        },
         // Don't run the query if there's no token
-        enabled: !!localStorage.getItem('access_token'),
+        enabled: !!localStorage.getItem('accessToken'),
         initialData: () => {
             const user = localStorage.getItem('user');
             if (user) {
@@ -90,8 +100,8 @@ export const useLogout = () => {
         mutationFn: () => userService.logout().then(res => res.data),
         onSuccess: () => {
             // Remove tokens and user data
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
             localStorage.removeItem('user');
 
             // Clear the current user from the cache
@@ -113,8 +123,8 @@ export const useLogoutAll = () => {
         mutationFn: () => userService.logoutAll().then(res => res.data),
         onSuccess: () => {
             // Remove tokens and user data
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
             localStorage.removeItem('user');
 
             // Clear the current user from the cache
@@ -141,24 +151,15 @@ export const useLogoutDevice = () => {
     });
 };
 
-export const useUpdateUser = () => {
+export const useLogoutAllDevices = () => {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: ({ userId, data }: { userId: string; data: Partial<User> }) =>
-            userService.updateUser(userId, data).then(res => res.data),
-        onSuccess: (data) => {
-            if (data.success && data.data) {
-                // Update local storage user data
-                localStorage.setItem('user', JSON.stringify(data.data));
-
-                // Update current user in the cache
-                queryClient.setQueryData(['currentUser'], {
-                    success: true,
-                    data: data.data
-                });
-            }
-        },
+        mutationFn: () =>
+            userService.logoutAll().then(res => res.data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['devices'] });
+        }
     });
 };
 
@@ -205,5 +206,102 @@ export const useRenameDevice = () => {
             // Invalidate the devices query to refetch the updated list
             queryClient.invalidateQueries({ queryKey: ['devices'] });
         }
+    });
+};
+
+export const useVerifyPin = () => {
+    const queryClient = useQueryClient();
+    const navigate = useNavigate();
+
+    return useMutation({
+        mutationFn: async (pin: string) => {
+            // Get refresh token
+            const refreshToken = localStorage.getItem('refreshToken');
+
+            if (!refreshToken) {
+                throw new Error('No refresh token available');
+            }
+
+            try {
+                const response = await userService.refreshToken(refreshToken, pin);
+
+                if (response.data.success && response.data.data) {
+                    const { accessToken, refreshToken: newRefreshToken } = response.data.data;
+
+                    if (accessToken) {
+                        localStorage.setItem('accessToken', accessToken);
+                    }
+
+                    if (newRefreshToken) {
+                        localStorage.setItem('refreshToken', newRefreshToken);
+                    }
+
+                    // Return success result
+                    return {
+                        success: true,
+                        data: response.data.data
+                    };
+                } else {
+                    throw new Error(response.data.message || 'PIN verification failed');
+                }
+            } catch (error) {
+                if (error instanceof Error) {
+                    throw error;
+                } else {
+                    throw new Error('PIN verification failed');
+                }
+            }
+        },
+        onSuccess: (data) => {
+            queryClient.invalidateQueries({ queryKey: ['currentUser'] });
+            navigate({ to: '/home' });
+        },
+        onError: (error) => {
+            console.error('PIN verification error:', error);
+            toast.error('PIN verification failed');
+        }
+    });
+};
+
+// Password reset related hooks
+export interface ForgotPasswordRequest {
+    email: string;
+}
+
+export interface VerifyResetCodeRequest {
+    email: string;
+    code: string;
+}
+
+export interface ResetPasswordRequest {
+    email: string;
+    code: string;
+    newPassword: string;
+    confirmPassword: string;
+}
+
+export const useForgotPassword = () => {
+    return useMutation({
+        mutationFn: (data: ForgotPasswordRequest) =>
+            userService.forgotPassword(data.email).then(res => res.data),
+    });
+};
+
+export const useResetPassword = () => {
+    return useMutation({
+        mutationFn: (data: ResetPasswordRequest) =>
+            userService.resetPassword(
+                data.email,
+                data.code,
+                data.newPassword,
+                data.confirmPassword
+            ).then(res => res.data),
+    });
+};
+
+export const useResendResetCode = () => {
+    return useMutation({
+        mutationFn: (email: string) =>
+            userService.resendResetCode(email).then(res => res.data),
     });
 }; 

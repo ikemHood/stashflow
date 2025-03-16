@@ -1,123 +1,113 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from '@tanstack/react-router';
+import React, { useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
 import { useMilestones } from '../context/MilestoneContext';
-import { MergedMilestone } from '../types/api';
-import { formatCurrency } from '../utils/formatters';
-import { calculateProgressPercentage } from '../utils/calculations';
+import { useNavigate } from '@tanstack/react-router';
+import TabBar from '../components/TabBar';
+import {
+    PlusIcon,
+    ChevronRightIcon,
+} from '@heroicons/react/24/outline';
 import Button from '../components/Button';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 const SavingsScreen: React.FC = () => {
-    const navigate = useNavigate();
+    const { isAuthenticated } = useAuth();
     const { milestones, fetchMilestones, isLoading, error } = useMilestones();
-    const [loading, setLoading] = useState<boolean>(true);
+    const navigate = useNavigate();
 
     useEffect(() => {
-        const loadMilestones = async () => {
-            try {
-                await fetchMilestones();
-            } catch (err) {
-                console.error('Failed to fetch milestones:', err);
-            } finally {
-                setLoading(false);
-            }
-        };
+        if (isAuthenticated) {
+            fetchMilestones();
+        }
+    }, [fetchMilestones, isAuthenticated]);
 
-        loadMilestones();
-    }, [fetchMilestones]);
+    const handleAddNewGoal = () => {
+        navigate({ to: '/add-milestone' });
+    };
 
     const handleGoToDetail = (milestoneId: string) => {
         navigate({ to: '/savings/$milestoneId', params: { milestoneId } });
     };
 
-    const handleAddNew = () => {
-        navigate({ to: '/add-milestone' });
-    };
-
-    const renderMilestoneCard = (milestone: MergedMilestone) => {
-        const progress = calculateProgressPercentage(milestone.currentAmount, milestone.targetAmount);
-
-        return (
-            <div
-                key={milestone.id}
-                className="bg-white rounded-xl shadow-sm overflow-hidden cursor-pointer"
-                onClick={() => handleGoToDetail(milestone.id)}
-            >
-                {milestone.image && (
-                    <div className="h-36 overflow-hidden">
-                        <img
-                            src={milestone.image}
-                            alt={milestone.name}
-                            className="w-full h-full object-cover"
-                        />
-                    </div>
-                )}
-                <div className="p-4">
-                    <h3 className="font-bold text-lg mb-1">{milestone.name}</h3>
-                    <p className="text-gray-600 text-sm mb-3 line-clamp-2">{milestone.description || 'No description'}</p>
-
-                    {/* Progress bar */}
-                    <div className="w-full bg-gray-200 h-2 rounded-full mb-2">
-                        <div
-                            className="h-full rounded-full bg-blue-500"
-                            style={{ width: `${progress}%` }}
-                        />
-                    </div>
-
-                    <div className="flex justify-between items-center">
-                        <span className="text-gray-600 text-sm">
-                            {formatCurrency(milestone.currentAmount)}
-                        </span>
-                        <span className="text-gray-800 font-medium">
-                            {formatCurrency(milestone.targetAmount)}
-                        </span>
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
-    if (loading || isLoading) {
-        return (
-            <div className="h-full flex justify-center items-center">
-                <LoadingSpinner size="large" />
-            </div>
-        );
-    }
-
-    if (error) {
-        return (
-            <div className="h-full flex flex-col justify-center items-center p-4">
-                <p className="text-red-500 mb-4">Failed to load savings goals</p>
-                <Button onClick={() => fetchMilestones()}>Try Again</Button>
-            </div>
-        );
-    }
-
+    // Always return the same outer structure with TabBar
     return (
-        <div className="h-full flex flex-col">
-            <div className="p-4 border-b border-gray-200">
-                <h1 className="text-2xl font-bold">Your Savings</h1>
+        <div className="flex flex-col h-full bg-gray-50">
+            {/* Header */}
+            <div className="p-5 flex justify-between items-center border-b border-gray-200">
+                <h1 className="text-xl font-bold text-gray-900">My savings</h1>
+                <button
+                    onClick={handleAddNewGoal}
+                    className="p-2 rounded-full bg-purple-100 hover:bg-purple-200"
+                >
+                    <PlusIcon className="w-5 h-5 text-purple-800" />
+                </button>
             </div>
 
-            <div className="flex-1 overflow-auto p-4">
-                {milestones.length === 0 ? (
-                    <div className="h-full flex flex-col justify-center items-center text-center">
-                        <p className="text-gray-500 mb-4">You don't have any savings goals yet</p>
-                        <Button onClick={handleAddNew}>Create Your First Goal</Button>
+            <div className="flex-1 px-5 pb-20 overflow-y-auto">
+                {/* Conditional content based on loading/error state */}
+                {isLoading ? (
+                    <div className="p-8 flex justify-center items-center">
+                        <LoadingSpinner size="medium" />
+                    </div>
+                ) : error ? (
+                    <div className="h-full flex flex-col justify-center items-center p-4">
+                        <p className="text-red-500 mb-4">Failed to load savings goals</p>
+                        <Button onClick={() => fetchMilestones()}>Try Again</Button>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {milestones.map(renderMilestoneCard)}
-                    </div>
+                    <>
+                        {milestones.length > 0 ? (
+                            <div className="grid grid-cols-2 gap-4 py-4">
+                                {milestones.map((milestone) => (
+                                    <div
+                                        key={milestone.id}
+                                        className="bg-white rounded-xl shadow-sm overflow-hidden"
+                                        onClick={() => handleGoToDetail(milestone.id)}
+                                    >
+                                        <div className="h-48 overflow-hidden">
+                                            <img
+                                                src={milestone.image || "/assets/target.png"}
+                                                alt={milestone.name}
+                                                className="w-full h-full object-cover"
+                                            />
+                                        </div>
+                                        <div className="p-4">
+                                            <h3 className="font-bold text-lg">{milestone.name}</h3>
+                                            <p className="text-gray-600 text-sm mb-2 line-clamp-1">
+                                                {milestone.description || `MacBook Pro (14-inch, M3, ${new Date().getFullYear()})`}
+                                            </p>
+
+                                            <div className="flex justify-between items-center mt-4">
+                                                <span className="text-gray-700 font-medium">View</span>
+                                                <ChevronRightIcon className="w-5 h-5 text-gray-500" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="mt-10 flex flex-col items-center justify-center text-center">
+                                <div className="w-20 h-20 mb-4">
+                                    <img src="/assets/save.svg" alt="No savings" className="w-full h-full" />
+                                </div>
+                                <h3 className="text-lg font-medium text-gray-900 mb-2">No Savings Goals Yet</h3>
+                                <p className="text-gray-500 text-sm mb-6 max-w-xs">
+                                    Create your first savings goal to start tracking your progress
+                                </p>
+                                <button
+                                    onClick={handleAddNewGoal}
+                                    className="bg-primary text-white font-medium py-3 px-6 rounded-lg flex items-center"
+                                >
+                                    <PlusIcon className="w-5 h-5 mr-2" />
+                                    Add New Goal
+                                </button>
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
 
-            {milestones.length > 0 && (
-                <div className="p-4 border-t border-gray-200">
-                    <Button onClick={handleAddNew} fullWidth>Add New Savings Goal</Button>
-                </div>
-            )}
+            <TabBar activeTab="savings" />
         </div>
     );
 };

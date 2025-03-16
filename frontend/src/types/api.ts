@@ -18,6 +18,7 @@ export interface User {
 export interface UserLoginRequest {
     email: string;
     password: string;
+    deviceName?: string;
 }
 
 export interface UserRegisterRequest {
@@ -144,11 +145,17 @@ export interface MergedMilestone {
 }
 
 export interface CreateMilestoneRequest {
-    title: string;
+    name: string;
+    targetAmount: number;
+    startDate: string;
+    endDate: string;
     description?: string;
-    targetAmount: string;
-    deadline?: string;
-    metadata?: Record<string, any>;
+    image?: string;
+    tokenAddress: string;
+    contractMilestoneId?: number;
+    currency?: 'USDT' | 'USDC' | 'DAI' | 'BUSD';
+    savingMethod?: 'manual' | 'automatic' | 'recurring';
+    savingFrequency?: 'daily' | 'weekly' | 'bi-weekly' | 'monthly';
 }
 
 // Token types

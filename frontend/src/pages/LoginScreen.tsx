@@ -4,14 +4,13 @@ import Input from '../components/Input';
 import Button from '../components/Button';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from '@tanstack/react-router';
-import { useAccount, useConnect } from 'wagmi';
+import { useConnect } from 'wagmi';
 import { metaMask } from 'wagmi/connectors';
 
 
 const LoginScreen: React.FC = () => {
     const { login, isLoading, hasSetPin } = useAuth();
     const navigate = useNavigate();
-    const { isConnected } = useAccount();
     const { connect } = useConnect();
 
     const [email, setEmail] = useState('');

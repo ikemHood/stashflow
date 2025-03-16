@@ -5,6 +5,11 @@ import Button from '../components/Button';
 import { useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
 import VerificationCodeInput from '../components/VerificationCodeInput';
+import {
+    useForgotPassword,
+    useResetPassword,
+    useResendResetCode
+} from '../hooks/useAuth';
 
 enum ForgotPasswordStep {
     EMAIL_FORM = 0,
@@ -25,9 +30,17 @@ const ForgotPasswordScreen: React.FC = () => {
 
     // Validation and loading states
     const [error, setError] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
 
-    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+    // Hooks
+    const forgotPasswordMutation = useForgotPassword();
+    const resetPasswordMutation = useResetPassword();
+    const resendResetCodeMutation = useResendResetCode();
+
+    // Whether any mutation is loading
+    const isLoading =
+        forgotPasswordMutation.isPending ||
+        resetPasswordMutation.isPending ||
+        resendResetCodeMutation.isPending;
 
     const validateEmail = (): boolean => {
         if (!email.trim()) {
@@ -37,16 +50,6 @@ const ForgotPasswordScreen: React.FC = () => {
             setError('Please enter a valid email');
             return false;
         }
-        return true;
-    };
-
-    const validateVerificationCode = (): boolean => {
-        if (!verificationCode.trim() || verificationCode.length !== 6) {
-            setError('Please enter a valid 6-digit verification code');
-            return false;
-        }
-
-        setError('');
         return true;
     };
 
@@ -73,72 +76,68 @@ const ForgotPasswordScreen: React.FC = () => {
         // Store the email for the verification screen
         localStorage.setItem('resetEmail', email);
 
-        setIsLoading(true);
-
-        // TODO: Integrate API for password reset request
-
-        try {
-            const response = await fetch(`${API_BASE_URL}/users/password/forgot`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'                    
+        // Call the API to request password reset
+        forgotPasswordMutation.mutate(
+            { email },
+            {
+                onSuccess: () => {
+                    toast.success('Reset code sent to your email');
+                    setCurrentStep(ForgotPasswordStep.VERIFICATION);
                 },
-                body: JSON.stringify({
-                    email                    
-                }),
-            });
-    
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Email credentials not found.');
+                onError: (error) => {
+                    if (error instanceof Error) {
+                        setError(error.message);
+                    } else {
+                        setError('Failed to send reset code');
+                    }
+                }
             }
-    
-            setTimeout(() => {
-                setIsLoading(false);
-                setCurrentStep(ForgotPasswordStep.VERIFICATION);
-            }, 1500);
-        } catch (error) {
-            console.error('Error verifying email:', error);
-            toast.error('Email credentials not found.');
-            setIsLoading(false);
-        }
-
-
-        
-    };
-
-    const handleVerifyCode = async () => {
-        if (!validateVerificationCode()) return;
-
-        setIsLoading(true);
-
-        // TODO: Integrate API to verify reset code
-        setTimeout(() => {
-            setIsLoading(false);
-            setCurrentStep(ForgotPasswordStep.NEW_PASSWORD);
-        }, 1500);
+        );
     };
 
     const handleResetPassword = async () => {
         if (!validateNewPassword()) return;
 
-        setIsLoading(true);
+        // Call the API to reset the password
+        resetPasswordMutation.mutate(
+            {
+                email,
+                code: verificationCode,
+                newPassword,
+                confirmPassword
+            },
+            {
+                onSuccess: () => {
+                    toast.success('Password has been reset successfully');
+                    setCurrentStep(ForgotPasswordStep.SUCCESS);
 
-        // TODO: Integrate API for password reset
-        setTimeout(() => {
-            setIsLoading(false);
-            setCurrentStep(ForgotPasswordStep.SUCCESS);
-
-            // Wait 2 seconds then redirect to login
-            setTimeout(() => {
-                navigate({ to: '/login' });
-            }, 2000);
-        }, 1500);
+                    // Wait 2 seconds then redirect to login
+                    setTimeout(() => {
+                        navigate({ to: '/login' });
+                    }, 2000);
+                },
+                onError: (error) => {
+                    if (error instanceof Error) {
+                        setError(error.message);
+                    } else {
+                        setError('Failed to reset password');
+                    }
+                }
+            }
+        );
     };
 
     const handleResendCode = () => {
-        // TODO: Integrate API to resend verification code
-        toast.success('Verification code resent to your email!');
+        // Call the API to resend verification code
+        resendResetCodeMutation.mutate(email, {
+            onError: (error) => {
+                if (error instanceof Error) {
+                    toast.error(error.message);
+                } else {
+                    toast.error('Failed to resend code');
+                }
+            }
+        });
     };
 
     // Render the correct step
@@ -198,12 +197,14 @@ const ForgotPasswordScreen: React.FC = () => {
                                 length={6}
                                 value={verificationCode}
                                 onChange={setVerificationCode}
-                                onComplete={handleVerifyCode}
+                                onComplete={() => {
+                                    setCurrentStep(ForgotPasswordStep.NEW_PASSWORD)
+                                }}
                                 error={error}
                             />
 
                             <Button
-                                onClick={handleVerifyCode}
+                                onClick={() => setCurrentStep(ForgotPasswordStep.NEW_PASSWORD)}
                                 loading={isLoading}
                                 fullWidth
                             >

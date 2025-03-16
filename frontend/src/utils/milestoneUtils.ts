@@ -17,9 +17,7 @@ export const mergeMilestoneData = (
     });
 
     // Merge API milestones with corresponding contract data
-    return apiMilestones.map(apiMilestone => {
-        // Look for a matching contract milestone
-        // The ID matching logic might need to be adjusted based on how IDs are stored/mapped
+    return apiMilestones?.map(apiMilestone => {
         const contractMilestone = contractMilestonesMap.get(apiMilestone.id);
 
         if (contractMilestone) {
