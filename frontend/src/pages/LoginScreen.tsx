@@ -8,7 +8,7 @@ import { useAccount, useConnect } from 'wagmi';
 import { metaMask } from 'wagmi/connectors';
 
 const LoginScreen: React.FC = () => {
-    const { login, isLoading } = useAuth();
+    const { login, isLoading, hasSetPin } = useAuth();
     const navigate = useNavigate();
     const { isConnected } = useAccount();
     const { connect } = useConnect();
@@ -36,7 +36,19 @@ const LoginScreen: React.FC = () => {
 
         try {
             await login();
-            navigate({ to: '/home' });
+
+            // Store first name in localStorage for PIN setup screen
+            const firstName = email.split('@')[0];
+            localStorage.setItem('firstName', firstName);
+
+            // Check if user has set up a PIN
+            if (!hasSetPin) {
+                // Redirect to PIN setup if not set
+                navigate({ to: '/pin/set' });
+            } else {
+                // Otherwise go to home
+                navigate({ to: '/home' });
+            }
         } catch (err) {
             setError('Invalid email or password');
         }
@@ -68,39 +80,36 @@ const LoginScreen: React.FC = () => {
                         error={error ? error : undefined}
                     />
 
-                    <div className="space-y-2">
-                        <Input
-                            label="Password"
-                            placeholder="Enter your password"
-                            type="password"
-                            value={password}
-                            onChange={handlePasswordChange}
-                            leftIcon={<LockClosedIcon className="w-5 h-5" />}
-                        />
+                    <Input
+                        label="Password"
+                        placeholder="Enter your password"
+                        type="password"
+                        value={password}
+                        onChange={handlePasswordChange}
+                        leftIcon={<LockClosedIcon className="w-5 h-5" />}
+                    />
 
-                        <div className="flex items-center justify-between pt-1">
-                            <div className="flex items-center">
-                                <input
-                                    id="remember-me"
-                                    name="remember-me"
-                                    type="checkbox"
-                                    checked={rememberMe}
-                                    onChange={(e) => setRememberMe(e.target.checked)}
-                                    className="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary"
-                                />
-                                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-600">
-                                    Remember me
-                                </label>
-                            </div>
-                            <div>
-                                <button
-                                    onClick={() => navigate({ to: '/forgot-password' })}
-                                    className="text-sm text-primary font-medium hover:underline"
-                                >
-                                    Forgot Password?
-                                </button>
-                            </div>
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center">
+                            <input
+                                id="remember-me"
+                                name="remember-me"
+                                type="checkbox"
+                                className="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary"
+                                checked={rememberMe}
+                                onChange={(e) => setRememberMe(e.target.checked)}
+                            />
+                            <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700">
+                                Remember me
+                            </label>
                         </div>
+
+                        <button
+                            onClick={() => navigate({ to: '/forgot-password' })}
+                            className="text-sm font-medium text-primary hover:underline"
+                        >
+                            Forgot password?
+                        </button>
                     </div>
 
                     <Button
@@ -111,34 +120,42 @@ const LoginScreen: React.FC = () => {
                         Log In
                     </Button>
 
-                    <div className="flex items-center gap-3 my-4">
-                        <div className="h-px bg-gray-300 flex-1"></div>
-                        <span className="text-sm text-gray-500">OR</span>
-                        <div className="h-px bg-gray-300 flex-1"></div>
+                    <div className="mt-4">
+                        <div className="relative">
+                            <div className="absolute inset-0 flex items-center">
+                                <div className="w-full border-t border-gray-300"></div>
+                            </div>
+                            <div className="relative flex justify-center text-sm">
+                                <span className="px-2 bg-gray-50 text-gray-500">
+                                    Or continue with
+                                </span>
+                            </div>
+                        </div>
+
+                        <div className="mt-4">
+                            <Button
+                                onClick={handleConnectWallet}
+                                variant="outline"
+                                fullWidth
+                            >
+                                MetaMask
+                            </Button>
+                        </div>
                     </div>
-
-                    <Button
-                        variant="outline"
-                        onClick={handleConnectWallet}
-                        fullWidth
-                        disabled={isConnected}
-                    >
-                        {isConnected ? 'Wallet Connected' : 'Connect Wallet'}
-                    </Button>
                 </div>
-            </div>
 
-            {/* Footer */}
-            <div className="mt-8 text-center">
-                <p className="text-gray-600">
-                    Don't have an account?{' '}
-                    <button
-                        onClick={() => navigate({ to: '/signup' })}
-                        className="text-primary font-medium hover:underline"
-                    >
-                        Sign Up
-                    </button>
-                </p>
+                {/* Footer */}
+                <div className="mt-8 text-center">
+                    <p className="text-gray-600">
+                        Don't have an account?{' '}
+                        <button
+                            onClick={() => navigate({ to: '/signup' })}
+                            className="text-primary font-medium hover:underline"
+                        >
+                            Sign Up
+                        </button>
+                    </p>
+                </div>
             </div>
         </div>
     );

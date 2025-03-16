@@ -12,13 +12,13 @@ import Button from '../components/Button';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
+import VerificationCodeInput from '../components/VerificationCodeInput';
 
 // Define the possible steps in the signup flow
 enum SignupStep {
     INITIAL_FORM = 0,
     EMAIL_VERIFICATION = 1,
-    PIN_SETUP = 2,
-    SUCCESS = 3
+    SUCCESS = 2
 }
 
 // Define password requirements
@@ -44,8 +44,6 @@ const SignupScreen: React.FC = () => {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [acceptTerms, setAcceptTerms] = useState(false);
     const [verificationCode, setVerificationCode] = useState('');
-    const [pin, setPin] = useState('');
-    const [confirmPin, setConfirmPin] = useState('');
     const [isPasswordFocused, setIsPasswordFocused] = useState(false);
 
     // Error states
@@ -55,9 +53,7 @@ const SignupScreen: React.FC = () => {
         password: '',
         confirmPassword: '',
         terms: '',
-        verificationCode: '',
-        pin: '',
-        confirmPin: ''
+        verificationCode: ''
     });
 
     // Check password requirements
@@ -132,24 +128,6 @@ const SignupScreen: React.FC = () => {
         return isValid;
     };
 
-    const validatePin = (): boolean => {
-        let isValid = true;
-        const newErrors = { ...errors, pin: '', confirmPin: '' };
-
-        if (!pin.trim() || pin.length !== 4 || !/^\d+$/.test(pin)) {
-            newErrors.pin = 'Please enter a valid 4-digit PIN';
-            isValid = false;
-        }
-
-        if (pin !== confirmPin) {
-            newErrors.confirmPin = 'PINs do not match';
-            isValid = false;
-        }
-
-        setErrors(newErrors);
-        return isValid;
-    };
-
     const handleInitialSubmit = async () => {
         if (!validateInitialForm()) return;
 
@@ -157,27 +135,23 @@ const SignupScreen: React.FC = () => {
         setCurrentStep(SignupStep.EMAIL_VERIFICATION);
     };
 
-    const handleVerificationSubmit = () => {
+    const handleVerificationSubmit = async () => {
         if (!validateVerificationCode()) return;
 
-        // TODO: Integrate API to verify email code
-        setCurrentStep(SignupStep.PIN_SETUP);
-    };
-
-    const handlePinSubmit = async () => {
-        if (!validatePin()) return;
-
         try {
-            // TODO: Integrate API to save PIN
-            await signup();
-            setCurrentStep(SignupStep.SUCCESS);
+            // TODO: Integrate API to verify email code
 
-            // Wait 2 seconds before navigating to the home screen
-            setTimeout(() => {
-                navigate({ to: '/home' });
-            }, 2000);
+            // Store first name in localStorage for PIN setup screen
+            const firstName = name.split(' ')[0];
+            localStorage.setItem('firstName', firstName);
+
+            // Complete the signup process
+            await signup();
+
+            // Navigate to PIN setup screen
+            navigate({ to: '/pin/set' });
         } catch (error) {
-            console.error('Error signing up:', error);
+            console.error('Error completing signup:', error);
             setErrors({
                 ...errors,
                 email: 'An account with this email already exists'
@@ -336,27 +310,20 @@ const SignupScreen: React.FC = () => {
                             <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
                                 <EnvelopeIcon className="w-8 h-8 text-primary" />
                             </div>
-                            <h1 className="text-2xl font-bold text-gray-800 mb-2">Verify Your Email</h1>
-                            <p className="text-gray-600 mb-1">We've sent a verification code to:</p>
+                            <h1 className="text-2xl font-bold text-gray-800 mb-2">Verify email address</h1>
+                            <p className="text-gray-600 mb-1">We sent a verification code to:</p>
                             <p className="text-primary font-medium mb-4">{email}</p>
                             <p className="text-gray-500 text-sm">
-                                Enter the 6-digit code to verify your account
+                                Please enter the code below to verify your email
                             </p>
                         </div>
 
                         <div className="space-y-6">
-                            <Input
-                                label="Verification Code"
-                                placeholder="Enter 6-digit code"
+                            <VerificationCodeInput
+                                length={6}
                                 value={verificationCode}
-                                onChange={(e) => {
-                                    // Only allow digits
-                                    const value = e.target.value.replace(/\D/g, '');
-                                    if (value.length <= 6) {
-                                        setVerificationCode(value);
-                                        if (errors.verificationCode) setErrors({ ...errors, verificationCode: '' });
-                                    }
-                                }}
+                                onChange={setVerificationCode}
+                                onComplete={handleVerificationSubmit}
                                 error={errors.verificationCode}
                             />
 
@@ -365,80 +332,19 @@ const SignupScreen: React.FC = () => {
                                 loading={isLoading}
                                 fullWidth
                             >
-                                Verify Email
+                                Continue
                             </Button>
 
                             <div className="text-center">
                                 <p className="text-gray-600 text-sm">
-                                    Didn't receive a code?{' '}
+                                    Didn't get the code?{' '}
                                     <button
                                         onClick={handleResendCode}
                                         className="text-primary font-medium hover:underline"
                                     >
-                                        Resend
+                                        Resend it
                                     </button>
                                 </p>
-                            </div>
-                        </div>
-                    </>
-                );
-
-            case SignupStep.PIN_SETUP:
-                return (
-                    <>
-                        <div className="text-center mb-8">
-                            <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-                                <KeyIcon className="w-8 h-8 text-primary" />
-                            </div>
-                            <h1 className="text-2xl font-bold text-gray-800 mb-2">Set Your PIN</h1>
-                            <p className="text-gray-600">
-                                Create a 4-digit PIN to secure your account
-                            </p>
-                        </div>
-
-                        <div className="space-y-5">
-                            <Input
-                                label="Create PIN"
-                                placeholder="Enter 4-digit PIN"
-                                type="password"
-                                maxLength={4}
-                                value={pin}
-                                onChange={(e) => {
-                                    // Only allow digits
-                                    const value = e.target.value.replace(/\D/g, '');
-                                    if (value.length <= 4) {
-                                        setPin(value);
-                                        if (errors.pin) setErrors({ ...errors, pin: '' });
-                                    }
-                                }}
-                                error={errors.pin}
-                            />
-
-                            <Input
-                                label="Confirm PIN"
-                                placeholder="Re-enter 4-digit PIN"
-                                type="password"
-                                maxLength={4}
-                                value={confirmPin}
-                                onChange={(e) => {
-                                    // Only allow digits
-                                    const value = e.target.value.replace(/\D/g, '');
-                                    if (value.length <= 4) {
-                                        setConfirmPin(value);
-                                        if (errors.confirmPin) setErrors({ ...errors, confirmPin: '' });
-                                    }
-                                }}
-                                error={errors.confirmPin}
-                            />
-
-                            <div className="pt-4">
-                                <Button
-                                    onClick={handlePinSubmit}
-                                    loading={isLoading}
-                                    fullWidth
-                                >
-                                    Complete Setup
-                                </Button>
                             </div>
                         </div>
                     </>
@@ -452,7 +358,7 @@ const SignupScreen: React.FC = () => {
                         </div>
                         <h1 className="text-2xl font-bold text-gray-800 mb-2">Account Created!</h1>
                         <p className="text-gray-600 mb-8">
-                            Your account has been successfully created. Redirecting you to the dashboard...
+                            Your account has been successfully created. Creating your PIN next...
                         </p>
                         <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto"></div>
                     </div>
@@ -482,7 +388,7 @@ const SignupScreen: React.FC = () => {
             )}
 
             {/* Back button for verification and PIN setup steps */}
-            {(currentStep === SignupStep.EMAIL_VERIFICATION || currentStep === SignupStep.PIN_SETUP) && (
+            {(currentStep === SignupStep.EMAIL_VERIFICATION) && (
                 <div className="mt-8 text-center">
                     <button
                         onClick={() => setCurrentStep(currentStep - 1)}

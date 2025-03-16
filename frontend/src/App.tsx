@@ -1,35 +1,31 @@
-import React from 'react';
-import { createWeb3Modal } from '@web3modal/wagmi';
-import { WagmiProvider } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { config } from './utils/web3Config';
 import { RouterProvider } from '@tanstack/react-router';
 import { router } from './router';
+import { AppKitProvider } from './providers/AppKitProvider'
 import { Toaster } from 'sonner';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 
-// Create QueryClient for React Query
-const queryClient = new QueryClient();
-
-// Configure Web3Modal
-createWeb3Modal({
-  wagmiConfig: config,
-  projectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || '',
-  featuredWalletIds: [],
-  themeMode: 'light',
-  themeVariables: {
-    '--w3m-accent': '#3b82f6',
-    '--w3m-border-radius-master': '12px',
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60 * 1000, // 1 minute
+      gcTime: 5 * 60 * 1000, // 5 minutes
+      retry: 1, // Only retry once
+      refetchOnWindowFocus: import.meta.env.PROD, // Only in production
+    },
   },
 });
 
 function App() {
   return (
-    <WagmiProvider config={config}>
+    <AppKitProvider>
       <QueryClientProvider client={queryClient}>
         <Toaster position="top-center" richColors closeButton />
         <RouterProvider router={router} />
+        {/* Add the react query dev tools in development mode */}
+        {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
       </QueryClientProvider>
-    </WagmiProvider>
+    </AppKitProvider>
   );
 }
 

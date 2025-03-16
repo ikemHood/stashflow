@@ -1,8 +1,7 @@
 import React from 'react';
 import { ArrowUpCircleIcon } from '@heroicons/react/24/outline';
 import Card from './Card';
-import { Milestone } from '../context/MilestoneContext';
-import { formatDate } from '../utils/helpers';
+import { Milestone } from '../types/StashflowTypes';
 
 interface MilestoneCardProps {
     milestone: Milestone;

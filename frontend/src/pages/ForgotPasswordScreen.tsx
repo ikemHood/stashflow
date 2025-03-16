@@ -4,6 +4,7 @@ import Input from '../components/Input';
 import Button from '../components/Button';
 import { useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
+import VerificationCodeInput from '../components/VerificationCodeInput';
 
 enum ForgotPasswordStep {
     EMAIL_FORM = 0,
@@ -42,6 +43,8 @@ const ForgotPasswordScreen: React.FC = () => {
             setError('Please enter a valid 6-digit verification code');
             return false;
         }
+
+        setError('');
         return true;
     };
 
@@ -65,6 +68,9 @@ const ForgotPasswordScreen: React.FC = () => {
     const handleRequestReset = async () => {
         if (!validateEmail()) return;
 
+        // Store the email for the verification screen
+        localStorage.setItem('resetEmail', email);
+
         setIsLoading(true);
 
         // TODO: Integrate API for password reset request
@@ -79,7 +85,7 @@ const ForgotPasswordScreen: React.FC = () => {
 
         setIsLoading(true);
 
-        // TODO: Integrate API for code verification
+        // TODO: Integrate API to verify reset code
         setTimeout(() => {
             setIsLoading(false);
             setCurrentStep(ForgotPasswordStep.NEW_PASSWORD);
@@ -117,7 +123,7 @@ const ForgotPasswordScreen: React.FC = () => {
                         <div className="text-center mb-8">
                             <img src="/assets/logo.svg" alt="Stashflow Logo" className="h-10 mx-auto mb-4" />
                             <h1 className="text-2xl font-bold text-gray-800 mb-2">Forgot Password</h1>
-                            <p className="text-gray-600">Enter your email and we'll send you a reset link</p>
+                            <p className="text-gray-600">Enter your email and click continue to start the reset process</p>
                         </div>
 
                         <div className="space-y-6">
@@ -139,7 +145,7 @@ const ForgotPasswordScreen: React.FC = () => {
                                 loading={isLoading}
                                 fullWidth
                             >
-                                Send Reset Link
+                                Continue
                             </Button>
                         </div>
                     </>
@@ -149,28 +155,23 @@ const ForgotPasswordScreen: React.FC = () => {
                 return (
                     <>
                         <div className="text-center mb-8">
-                            <img src="/assets/logo.svg" alt="Stashflow Logo" className="h-10 mx-auto mb-4" />
-                            <h1 className="text-2xl font-bold text-gray-800 mb-2">Verify Code</h1>
-                            <p className="text-gray-600 mb-1">We've sent a verification code to:</p>
+                            <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+                                <EnvelopeIcon className="w-8 h-8 text-primary" />
+                            </div>
+                            <h1 className="text-2xl font-bold text-gray-800 mb-2">Verify email address</h1>
+                            <p className="text-gray-600 mb-1">We sent a verification code to:</p>
                             <p className="text-primary font-medium mb-4">{email}</p>
                             <p className="text-gray-500 text-sm">
-                                Enter the 6-digit code to continue
+                                Please enter the code below to verify your email
                             </p>
                         </div>
 
                         <div className="space-y-6">
-                            <Input
-                                label="Verification Code"
-                                placeholder="Enter 6-digit code"
+                            <VerificationCodeInput
+                                length={6}
                                 value={verificationCode}
-                                onChange={(e) => {
-                                    // Only allow digits
-                                    const value = e.target.value.replace(/\D/g, '');
-                                    if (value.length <= 6) {
-                                        setVerificationCode(value);
-                                        setError('');
-                                    }
-                                }}
+                                onChange={setVerificationCode}
+                                onComplete={handleVerifyCode}
                                 error={error}
                             />
 
@@ -179,17 +180,17 @@ const ForgotPasswordScreen: React.FC = () => {
                                 loading={isLoading}
                                 fullWidth
                             >
-                                Verify Code
+                                Continue
                             </Button>
 
                             <div className="text-center">
                                 <p className="text-gray-600 text-sm">
-                                    Didn't receive a code?{' '}
+                                    Didn't get the code?{' '}
                                     <button
                                         onClick={handleResendCode}
                                         className="text-primary font-medium hover:underline"
                                     >
-                                        Resend
+                                        Resend it
                                     </button>
                                 </p>
                             </div>
@@ -202,8 +203,8 @@ const ForgotPasswordScreen: React.FC = () => {
                     <>
                         <div className="text-center mb-8">
                             <img src="/assets/logo.svg" alt="Stashflow Logo" className="h-10 mx-auto mb-4" />
-                            <h1 className="text-2xl font-bold text-gray-800 mb-2">Reset Password</h1>
-                            <p className="text-gray-600">Create a new password for your account</p>
+                            <h1 className="text-2xl font-bold text-gray-800 mb-2">Update Password</h1>
+                            <p className="text-gray-600">Set a new password and confirm to proceed</p>
                         </div>
 
                         <div className="space-y-5">

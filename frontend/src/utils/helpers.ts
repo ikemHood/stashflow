@@ -26,6 +26,25 @@ export function convertEthToWei(ethAmount: string): bigint {
 }
 
 /**
+ * Alias for convertEthToWei to match naming in MilestoneContext
+ */
+export function ethToWei(ethAmount: string): bigint {
+    return convertEthToWei(ethAmount);
+}
+
+/**
+ * Converts Wei to ETH (full string, not formatted)
+ */
+export function weiToEth(weiAmount: bigint): string {
+    try {
+        return formatEther(weiAmount);
+    } catch (error) {
+        console.error('Error converting Wei to ETH:', error);
+        return '0';
+    }
+}
+
+/**
  * Converts a string to bytes32 format
  */
 export function stringToBytes32(str: string): string {
