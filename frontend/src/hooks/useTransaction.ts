@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { transactionService } from '../lib/api-services';
-import { CreateTransactionRequest, PaginationParams } from '../types/api';
+import { CreateTransactionRequest, PaginationParams, ApiResponse } from '../types/api';
 
 export const useMilestoneTransactions = (milestoneId: string, params?: PaginationParams) => {
     return useQuery({
@@ -15,8 +15,12 @@ export const useCreateDepositTransaction = () => {
 
     return useMutation({
         mutationFn: (data: CreateTransactionRequest) =>
-            transactionService.createDepositTransaction(data).then(res => res.data),
-        onSuccess: (data) => {
+            transactionService.depositToMilestone(data.milestoneId, {
+                amount: parseFloat(data.amount),
+                txHash: data.txHash,
+                metadata: data.metadata
+            }).then((res: any) => res.data),
+        onSuccess: (data: ApiResponse<any>) => {
             if (data.success && data.data) {
                 // Get current user from cache
                 const currentUser = queryClient.getQueryData<any>(['currentUser']);
@@ -50,8 +54,12 @@ export const useCreateWithdrawalTransaction = () => {
 
     return useMutation({
         mutationFn: (data: CreateTransactionRequest) =>
-            transactionService.createWithdrawalTransaction(data).then(res => res.data),
-        onSuccess: (data) => {
+            transactionService.withdrawFromMilestone(data.milestoneId, {
+                amount: parseFloat(data.amount),
+                txHash: data.txHash,
+                metadata: data.metadata
+            }).then((res: any) => res.data),
+        onSuccess: (data: ApiResponse<any>) => {
             if (data.success && data.data) {
                 // Get current user from cache
                 const currentUser = queryClient.getQueryData<any>(['currentUser']);

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Bars3Icon, PlusIcon, WalletIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate, useRouter } from '@tanstack/react-router';
+import { useNavigate } from '@tanstack/react-router';
 import { shortenAddress } from '../utils/helpers';
 
 interface HeaderProps {
@@ -17,7 +17,6 @@ const Header: React.FC<HeaderProps> = ({
 }) => {
     const { user } = useAuth();
     const navigate = useNavigate();
-    const router = useRouter();
 
     const handleBack = () => {
         // Go back in history
@@ -70,7 +69,7 @@ const Header: React.FC<HeaderProps> = ({
                     >
                         <WalletIcon className="w-4 h-4" />
                         <span className="text-sm font-medium">
-                            {user ? shortenAddress(user.address) : 'Connect'}
+                            {user ? shortenAddress(user.address || '') : 'Connect'}
                         </span>
                     </button>
                 </div>

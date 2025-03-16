@@ -1,4 +1,4 @@
-import React, { ReactNode } from 'react';
+import { ReactNode } from 'react';
 import { WagmiProvider } from 'wagmi';
 import { wagmiAdapter } from '../lib/appkit';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';

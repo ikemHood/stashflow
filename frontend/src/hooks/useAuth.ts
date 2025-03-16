@@ -1,4 +1,3 @@
-
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { userService } from '../lib/api-services';
 import { User, UserLoginRequest, UserRegisterRequest } from '../types/api';
@@ -252,7 +251,7 @@ export const useVerifyPin = () => {
                 }
             }
         },
-        onSuccess: (data) => {
+        onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['currentUser'] });
             navigate({ to: '/home' });
         },
