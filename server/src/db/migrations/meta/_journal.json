@@ -1,0 +1,34 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1741983850569,
+      "tag": "0000_yummy_sage",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1741983932651,
+      "tag": "0001_good_famine",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1741986266595,
+      "tag": "0002_perpetual_jigsaw",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1742164219331,
+      "tag": "0003_bouncy_turbo",
+      "breakpoints": true
+    }
+  ]
+}
